@@ -1,0 +1,3 @@
+# Claude Design 匯出的 standalone HTML 有 15 MB（絕大部分是內嵌中文字型），
+# 不進版控。解出來的原始碼放在 extracted/，那才是要看的東西。
+*.html

@@ -1,0 +1,52 @@
+/*
+ * 設計 token — 來源：docs/design/extracted/style-a-screens.jsx 的 `A` 物件
+ * 風格 A · 溫柔典雅（米白 · 奶油 · 玫瑰金）
+ * 改配色從這裡改，不要散在各元件裡。
+ */
+
+:root {
+  /* 底色 */
+  --c-bg: #faf6f0; /* 米白 */
+  --c-bg-soft: #f4ebe0; /* 奶油 */
+  --c-bg-deep: #ede0ce;
+  --c-card: #fffcf7;
+
+  /* 文字 */
+  --c-ink: #3d2e26; /* 深棕 */
+  --c-ink-soft: #7a6557;
+  --c-ink-mute: #a89484;
+
+  /* 主色 */
+  --c-rose: #b76e79; /* 玫瑰金 */
+  --c-rose-soft: #d9a9ae;
+  --c-gold: #c9a86a;
+
+  /* 線條 */
+  --c-line: rgba(61, 46, 38, 0.1);
+  --c-line-strong: rgba(61, 46, 38, 0.18);
+
+  /* 深色畫面（婚紗集、照片詳情） */
+  --c-dark-bg: var(--c-ink);
+  --c-dark-ink: #ffffff;
+  --c-dark-ink-mute: rgba(255, 255, 255, 0.7);
+  --c-dark-line: rgba(255, 255, 255, 0.2);
+
+  /* 字體 */
+  --f-serif: 'Noto Serif TC', 'Songti TC', 'PingFang TC', serif;
+  --f-sans: 'Noto Sans TC', 'PingFang TC', -apple-system, sans-serif;
+  --f-display: 'Cormorant Garamond', 'Noto Serif TC', serif;
+
+  /* 陰影 */
+  --shadow-card: 0 1px 3px rgba(61, 46, 38, 0.06);
+  --shadow-raised: 0 4px 14px rgba(61, 46, 38, 0.08);
+  --shadow-float: 0 8px 20px rgba(61, 46, 38, 0.3);
+  --shadow-rose: 0 8px 24px rgba(183, 110, 121, 0.25);
+
+  /* 版面 */
+  --tabbar-height: 49px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* 各畫面頂部內距：設計稿的 56px 是狀態列高度，真實裝置改用 safe-area */
+  --page-top: calc(var(--safe-top) + 16px);
+  --page-bottom: calc(var(--tabbar-height) + var(--safe-bottom));
+}

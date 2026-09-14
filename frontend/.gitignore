@@ -1,0 +1,12 @@
+# 前端（Node / Vite）專屬。不要往 repo 根目錄搬。
+
+/dist/
+/dev-dist/
+/coverage/
+node_modules/
+*.tsbuildinfo
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
