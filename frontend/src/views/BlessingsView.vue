@@ -1,7 +1,47 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed, nextTick, ref } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import DecoDivider from '@/components/DecoDivider.vue'
-import { blessings, stats } from '@/mock/sample'
+import { wedding } from '@/config/wedding'
+import { blessings as sampleBlessings, stats } from '@/mock/sample'
+import { session } from '@/stores/session'
+import type { Blessing } from '@/types/album'
+
+const router = useRouter()
+
+// 複製一份，送出的新祝福才能插進列表而不動到 mock 本身
+const blessings = ref<Blessing[]>([...sampleBlessings])
+
+const nickname = computed(() => session.nickname || '賓客')
+
+const composing = ref(false)
+const draft = ref('')
+const draftEl = ref<HTMLTextAreaElement>()
+const canSend = computed(() => draft.value.trim().length > 0)
+
+async function openComposer() {
+  composing.value = true
+  await nextTick()
+  draftEl.value?.focus()
+}
+
+function closeComposer() {
+  composing.value = false
+}
+
+function send() {
+  if (!canSend.value) return
+  // TODO: 接後端 API。現在只插在本頁列表最上面，重新整理就會消失
+  blessings.value.unshift({
+    id: 'local-' + Date.now(),
+    guest: { id: 'me', nickname: nickname.value },
+    text: draft.value.trim(),
+    createdAt: new Date().toISOString(),
+  })
+  draft.value = ''
+  composing.value = false
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 
 /** 把 ISO 時間轉成「剛剛 / 12 分鐘前 / 1 小時前」 */
 function relativeTime(iso: string) {
@@ -52,7 +92,7 @@ function relativeTime(iso: string) {
       </li>
     </ul>
 
-    <button class="fab" type="button">
+    <button class="fab" type="button" @click="openComposer">
       <svg
         viewBox="0 0 24 24"
         fill="none"
@@ -65,6 +105,41 @@ function relativeTime(iso: string) {
       </svg>
       寫祝福
     </button>
+
+    <Transition name="sheet">
+      <div v-if="composing" class="backdrop" @click.self="closeComposer">
+        <form class="sheet" role="dialog" aria-label="寫祝福" @submit.prevent="send">
+          <span class="grip" />
+          <div class="sheet-head">
+            <button class="sheet-cancel" type="button" @click="closeComposer">取消</button>
+            <h2>寫 祝 福</h2>
+            <span class="sheet-spacer" />
+          </div>
+
+          <div class="identity">
+            <span class="avatar">{{ nickname[0] }}</span>
+            <p class="identity-name">以「{{ nickname }}」留言</p>
+            <button class="identity-change" type="button" @click="router.push({ name: 'welcome' })">
+              更改
+            </button>
+          </div>
+
+          <textarea
+            ref="draftEl"
+            v-model="draft"
+            class="draft"
+            :maxlength="wedding.maxBlessingLength"
+            placeholder="想對新人說些什麼？"
+            rows="5"
+          />
+
+          <div class="sheet-foot">
+            <span class="counter">{{ draft.length }} / {{ wedding.maxBlessingLength }}</span>
+            <button class="send" type="submit" :disabled="!canSend">送 出</button>
+          </div>
+        </form>
+      </div>
+    </Transition>
   </main>
 </template>
 
@@ -221,5 +296,153 @@ function relativeTime(iso: string) {
 .fab svg {
   width: 14px;
   height: 14px;
+}
+.backdrop {
+  position: fixed;
+  inset: 0;
+  /* 要蓋過 AppTabBar（30） */
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(61, 46, 38, 0.35);
+}
+
+.sheet {
+  width: 100%;
+  padding: 12px 20px calc(var(--safe-bottom) + 20px);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  background: var(--c-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.grip {
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c-line);
+  margin: 0 auto;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-family: var(--f-serif);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.sheet-cancel {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  color: var(--c-ink-mute);
+  min-width: 40px;
+  text-align: left;
+}
+
+.sheet-spacer {
+  min-width: 40px;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.identity-name {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--c-ink-soft);
+}
+
+.identity-change {
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+  color: var(--c-rose);
+}
+
+.draft {
+  padding: 14px 16px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-card);
+  resize: none;
+  font-family: var(--f-serif);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--c-ink);
+  caret-color: var(--c-rose);
+}
+
+.draft:focus {
+  outline: none;
+  border-color: var(--c-rose-soft);
+}
+
+.draft::placeholder {
+  color: var(--c-ink-mute);
+  opacity: 0.55;
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.counter {
+  font-size: 10px;
+  color: var(--c-ink-mute);
+}
+
+.send {
+  height: 40px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--c-rose);
+  color: #fff;
+  font-size: 13px;
+  letter-spacing: 2px;
+  box-shadow: var(--shadow-rose);
+}
+
+.send:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: default;
+}
+
+.sheet-enter-active,
+.sheet-leave-active {
+  transition: background 0.25s;
+}
+
+.sheet-enter-active .sheet,
+.sheet-leave-active .sheet {
+  transition: transform 0.25s ease-out;
+}
+
+.sheet-enter-from,
+.sheet-leave-to {
+  background: transparent;
+}
+
+.sheet-enter-from .sheet,
+.sheet-leave-to .sheet {
+  transform: translateY(100%);
 }
 </style>
