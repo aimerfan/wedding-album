@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import PhotoTile from '@/components/PhotoTile.vue'
+import PhotoSwiper from '@/components/PhotoSwiper.vue'
 import { feedPhotos, stats } from '@/mock/sample'
 
 const props = defineProps<{ photoId: string }>()
@@ -13,8 +13,16 @@ const photo = computed(() => feedPhotos[index.value])
 /** 「3 / 247」的序號 */
 const position = computed(() => (index.value >= 0 ? index.value + 1 : 1))
 
-/** 寬高比，給 .stage 算出「完整放進舞台」的寬度 */
-const ratio = computed(() => (photo.value ? photo.value.width / photo.value.height : 1))
+const slides = feedPhotos.map((p) => ({ key: p.id, photo: p, ratio: p.width / p.height }))
+
+/** 滑到別張時換掉網址，返回鍵才會直接回相簿，而不是一張張倒退 */
+const current = computed({
+  get: () => index.value,
+  set: (i) => {
+    const next = feedPhotos[i]
+    if (next) router.replace({ name: 'photo-detail', params: { photoId: next.id } })
+  },
+})
 
 const takenLabel = computed(() => {
   const p = photo.value
@@ -62,13 +70,7 @@ function close() {
     </header>
 
     <div class="stage">
-      <PhotoTile
-        class="photo"
-        :photo="photo"
-        :index="index"
-        :ratio="photo.width + '/' + photo.height"
-        :style="{ '--ratio': ratio }"
-      />
+      <PhotoSwiper v-model="current" :slides="slides" />
     </div>
 
     <section class="panel">
@@ -143,15 +145,6 @@ function close() {
   flex: 1;
   min-height: 0;
   padding: calc(var(--page-top) + 84px) 0 16px;
-  container-type: size;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 等比縮放到剛好塞進舞台：寬度取「舞台寬」與「舞台高 × 寬高比」的較小值 */
-.photo {
-  width: min(100cqw, 100cqh * var(--ratio));
 }
 
 /* 留言區固定貼底；祝福太長時在面板內捲動，不把照片擠掉 */
