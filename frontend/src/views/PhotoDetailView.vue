@@ -13,6 +13,9 @@ const photo = computed(() => feedPhotos[index.value])
 /** 「3 / 247」的序號 */
 const position = computed(() => (index.value >= 0 ? index.value + 1 : 1))
 
+/** 寬高比，給 .stage 算出「完整放進舞台」的寬度 */
+const ratio = computed(() => (photo.value ? photo.value.width / photo.value.height : 1))
+
 const takenLabel = computed(() => {
   const p = photo.value
   if (!p) return ''
@@ -59,7 +62,13 @@ function close() {
     </header>
 
     <div class="stage">
-      <PhotoTile :photo="photo" :index="index" :ratio="photo.width + '/' + photo.height" />
+      <PhotoTile
+        class="photo"
+        :photo="photo"
+        :index="index"
+        :ratio="photo.width + '/' + photo.height"
+        :style="{ '--ratio': ratio }"
+      />
     </div>
 
     <section class="panel">
@@ -87,7 +96,10 @@ function close() {
 
 <style scoped>
 .detail {
-  min-height: 100dvh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--c-dark-bg);
   color: var(--c-dark-ink);
   position: relative;
@@ -128,13 +140,25 @@ function close() {
 }
 
 .stage {
-  padding-top: calc(var(--page-top) + 84px);
+  flex: 1;
+  min-height: 0;
+  padding: calc(var(--page-top) + 84px) 0 16px;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+/* 等比縮放到剛好塞進舞台：寬度取「舞台寬」與「舞台高 × 寬高比」的較小值 */
+.photo {
+  width: min(100cqw, 100cqh * var(--ratio));
+}
+
+/* 留言區固定貼底；祝福太長時在面板內捲動，不把照片擠掉 */
 .panel {
-  position: sticky;
-  bottom: 0;
-  margin-top: auto;
+  flex-shrink: 0;
+  max-height: 55dvh;
+  overflow-y: auto;
   background: var(--c-bg);
   color: var(--c-ink);
   border-top-left-radius: 24px;
