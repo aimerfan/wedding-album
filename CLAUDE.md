@@ -3,8 +3,9 @@
 ## 給 agent 的額外規則
 
 - 不要在根目錄建立 `package.json`、`.nvmrc` 這類綁定特定技術棧的檔案。
-- 後端尚未選型。不要在 `backend/` 建立任何語言專屬的骨架、設定檔或 `.gitignore`。
-- `frontend/src/types/album.ts` 是前端單方面寫的資料形狀，不是雙方談好的契約。
+- 後端已選定 Python 3.14 + Flask，但骨架與套件管理方式還沒定。
+  使用者沒要求之前，不要在 `backend/` 建立任何程式碼、設定檔或 `.gitignore`。
+- `frontend/src/types/album.ts` 是前端單方面寫的資料形狀，不是雙方談好的 API 規格。
   要接 API 時先確認，不要直接當規格實作。
 
 ## 文件分工
