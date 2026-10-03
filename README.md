@@ -12,6 +12,7 @@ wedding-album/
 ├── frontend/   # Vue 3 + TypeScript + Vite（PWA）── 見 frontend/README.md
 ├── backend/    # Python 3.14 + Flask（尚未建立骨架）── 見 backend/README.md
 └── docs/
+    ├── api.md  # API 規格（前後端共用）
     └── design/ # 設計稿
 ```
 
@@ -24,7 +25,7 @@ wedding-album/
 - [x] 依風格 A 設計稿實作 8 支畫面（版面完成，互動多數尚未接線）
 - [x] 後端選型（Python 3.14 + Flask）
 - [ ] 後端骨架
-- [ ] API 規格
+- [ ] API 規格（草稿：[docs/api.md](docs/api.md)，有待確認項目）
 - [ ] 相片上傳
 
 ## Commit 訊息

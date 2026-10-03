@@ -15,5 +15,7 @@ Python 3.14 + Flask。骨架尚未建立。
 
 - 正式環境的相片儲存（研究中，候選 AWS S3 等物件儲存）
 
+API 規格寫在 [docs/api.md](../docs/api.md)（目前是草稿）。
+
 `frontend/src/types/album.ts` 描述了前端目前假設的資料形狀，但那是前端單方面寫的，
 不是雙方談好的 API 規格——要當規格用之前先確認。
