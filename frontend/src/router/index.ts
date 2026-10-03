@@ -47,7 +47,8 @@ const router = createRouter({
       component: () => import('@/views/NotFoundView.vue'),
     },
   ],
-  scrollBehavior: () => ({ top: 0 }),
+  // 同一頁只改 query（例如婚紗集的 ?photo=）時留在原位，關掉檢視才不會跳回頂端
+  scrollBehavior: (to, from) => (to.path === from.path ? false : { top: 0 }),
 })
 
 /**
