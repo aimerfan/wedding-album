@@ -2,24 +2,35 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
-import { feedPhotos, stats } from '@/mock/sample'
+import { feedPhotos, myPhotos, stats } from '@/mock/sample'
 
 const props = defineProps<{ photoId: string }>()
 const router = useRouter()
 
-const index = computed(() => feedPhotos.findIndex((p) => p.id === props.photoId))
-const photo = computed(() => feedPhotos[index.value])
+/**
+ * 左右滑動要在哪一串照片裡換張：從「我的」點進來就只在我上傳的之間滑。
+ * 假資料階段用 id 判斷；接上 API 後改成依網址上的篩選條件（例如 ?uploader=me）向後端要列表。
+ */
+const list = computed(() =>
+  myPhotos.some((p) => p.id === props.photoId) ? myPhotos : feedPhotos,
+)
 
-/** 「3 / 247」的序號 */
+const index = computed(() => list.value.findIndex((p) => p.id === props.photoId))
+const photo = computed(() => list.value[index.value])
+
+/** 「3 / 247」的序號；首頁那串的總數是全相簿的張數 */
 const position = computed(() => (index.value >= 0 ? index.value + 1 : 1))
+const total = computed(() => (list.value === feedPhotos ? stats.photoCount : list.value.length))
 
-const slides = feedPhotos.map((p) => ({ key: p.id, photo: p, ratio: p.width / p.height }))
+const slides = computed(() =>
+  list.value.map((p) => ({ key: p.id, photo: p, ratio: p.width / p.height })),
+)
 
 /** 滑到別張時換掉網址，返回鍵才會直接回相簿，而不是一張張倒退 */
 const current = computed({
   get: () => index.value,
   set: (i) => {
-    const next = feedPhotos[i]
+    const next = list.value[i]
     if (next) router.replace({ name: 'photo-detail', params: { photoId: next.id } })
   },
 })
@@ -53,7 +64,7 @@ function close() {
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>
       </button>
-      <span class="counter">{{ position }} / {{ stats.photoCount }}</span>
+      <span class="counter">{{ position }} / {{ total }}</span>
       <button class="round" type="button" aria-label="更多">
         <svg
           viewBox="0 0 24 24"
@@ -94,6 +105,12 @@ function close() {
       </div>
     </section>
   </main>
+
+  <!-- 照片被刪掉或網址打錯時，不要只留一片空白 -->
+  <main v-else class="detail missing">
+    <p>找不到這張照片</p>
+    <button class="missing-back" type="button" @click="close">回相簿</button>
+  </main>
 </template>
 
 <style scoped>
@@ -105,6 +122,23 @@ function close() {
   background: var(--c-dark-bg);
   color: var(--c-dark-ink);
   position: relative;
+}
+
+.missing {
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--c-dark-ink-mute);
+}
+
+.missing-back {
+  padding: 8px 20px;
+  border: 1px solid var(--c-dark-line);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--c-dark-ink);
+  font-size: 13px;
 }
 
 .bar {
