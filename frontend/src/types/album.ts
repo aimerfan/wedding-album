@@ -1,6 +1,6 @@
 /**
- * 相簿領域型別。
- * 後端 API 定案後，這裡會是前後端共同的 API 規格，改動請同步兩邊。
+ * 相簿領域型別，對應 docs/api.md 的「資料形狀」。規格改了這裡要跟著改。
+ * Guest、Photo 已經跟後端對齊；其餘的還是前端先寫的版本，接上對應的 API 時再對齊。
  */
 
 export type GuestId = string
@@ -23,27 +23,32 @@ export type PhotoTag = 'welcome' | 'ceremony' | 'banquet'
 export interface Photo {
   id: PhotoId
   kind: MediaKind
-  /** 原圖網址 */
+  /** 原圖網址。後端組好的，直接放進 <img src>，不要自己組 */
   url: string
   /** 縮圖網址。列表一律用這個，不要載原圖 */
   thumbnailUrl: string
   width: number
   height: number
-  /** 影片長度（秒），kind 為 'video' 時才有 */
-  durationSeconds?: number
+  /** 影片長度（秒），kind 為 'video' 時才有。目前不開放影片 */
+  durationSeconds?: number | null
   uploader: Guest
   /** ISO 8601 */
   uploadedAt: string
   /** ISO 8601，EXIF 取得，可能沒有 */
-  takenAt?: string
+  takenAt?: string | null
   /** 上傳時附的祝福語 */
-  blessing?: string
-  location?: string
+  blessing?: string | null
   likeCount: number
   /** 目前這位賓客按過讚沒 */
   likedByMe: boolean
   favoritedByMe: boolean
-  tags: PhotoTag[]
+  tag: PhotoTag
+}
+
+/** 列表類 API 的分頁回應，見 docs/api.md 的「分頁」 */
+export interface Page<T> {
+  items: T[]
+  nextCursor: string | null
 }
 
 /** 祝福留言。附在照片上的會帶 photoId，留言牆上的獨立留言則沒有。 */

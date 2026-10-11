@@ -1,43 +1,74 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { ApiError } from '@/api/client'
+import { fetchPhoto } from '@/api/photos'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
-import { feedPhotos, myPhotos, stats } from '@/mock/sample'
+import { ensureLoaded, filterFromQuery, getPhotoList, loadMore } from '@/stores/photoLists'
+import type { Photo } from '@/types/album'
 
 const props = defineProps<{ photoId: string }>()
 const route = useRoute()
 const router = useRouter()
 
-/** 從某位賓客的照片頁點進來時帶 ?uploader=<guestId>，左右滑只在他拍的照片之間換 */
-const uploaderId = computed(() =>
-  typeof route.query.uploader === 'string' ? route.query.uploader : null,
+/**
+ * 左右滑動要在哪一串照片裡換張：由網址上的篩選條件決定（例如 ?uploader=me、?tag=ceremony），
+ * 跟列表頁用的是同一份快取，所以從哪裡點進來，就在那一串裡滑。
+ */
+const filter = computed(() => filterFromQuery(route.query))
+const list = computed(() => getPhotoList(filter.value))
+
+/** 直接打開分享連結、而那張不在列表已載入的範圍時，單獨抓這一張來顯示 */
+const single = ref<Photo | null>(null)
+const missing = ref(false)
+const loadError = ref('')
+
+const inList = computed(() => list.value.items.some((p) => p.id === props.photoId))
+const photos = computed(() => (inList.value ? list.value.items : single.value ? [single.value] : []))
+
+watch(
+  () => props.photoId,
+  async (id) => {
+    if (inList.value) return
+    missing.value = false
+    loadError.value = ''
+    await ensureLoaded(filter.value)
+    if (list.value.items.some((p) => p.id === id)) return
+    try {
+      single.value = await fetchPhoto(id)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) missing.value = true
+      else loadError.value = e instanceof ApiError ? e.message : '載入失敗，請稍後再試'
+    }
+  },
+  { immediate: true },
 )
 
-/**
- * 左右滑動要在哪一串照片裡換張。
- * 「我的」那串目前用 id 判斷；接上 API 後統一改成依 ?uploader= 向後端要列表（對應 GET /api/photos?uploader=）。
- */
-const list = computed(() => {
-  if (uploaderId.value) return feedPhotos.filter((p) => p.uploader.id === uploaderId.value)
-  return myPhotos.some((p) => p.id === props.photoId) ? myPhotos : feedPhotos
+const index = computed(() => photos.value.findIndex((p) => p.id === props.photoId))
+const photo = computed(() => photos.value[index.value])
+
+// 滑到倒數第三張就先載下一頁，滑到底時通常已經接上了
+watch(index, (i) => {
+  const l = list.value
+  if (inList.value && !l.done && i >= l.items.length - 3) loadMore(filter.value)
 })
 
-const index = computed(() => list.value.findIndex((p) => p.id === props.photoId))
-const photo = computed(() => list.value[index.value])
-
-/** 「3 / 247」的序號；首頁那串的總數是全相簿的張數 */
-const position = computed(() => (index.value >= 0 ? index.value + 1 : 1))
-const total = computed(() => (list.value === feedPhotos ? stats.photoCount : list.value.length))
+/** 「3 / 30+」：還有下一頁沒載時，總數後面加 + */
+const counter = computed(() => {
+  if (!inList.value) return ''
+  const l = list.value
+  return `${index.value + 1} / ${l.items.length}${l.done ? '' : '+'}`
+})
 
 const slides = computed(() =>
-  list.value.map((p) => ({ key: p.id, photo: p, ratio: p.width / p.height })),
+  photos.value.map((p) => ({ key: p.id, photo: p, ratio: p.width / p.height })),
 )
 
 /** 滑到別張時換掉網址，返回鍵才會直接回相簿，而不是一張張倒退 */
 const current = computed({
   get: () => index.value,
   set: (i) => {
-    const next = list.value[i]
+    const next = photos.value[i]
     if (next) {
       router.replace({ name: 'photo-detail', params: { photoId: next.id }, query: route.query })
     }
@@ -48,7 +79,7 @@ const takenLabel = computed(() => {
   const p = photo.value
   if (!p) return ''
   const d = new Date(p.uploadedAt)
-  const time =
+  return (
     String(d.getMonth() + 1) +
     '/' +
     d.getDate() +
@@ -56,7 +87,7 @@ const takenLabel = computed(() => {
     String(d.getHours()).padStart(2, '0') +
     ':' +
     String(d.getMinutes()).padStart(2, '0')
-  return p.location ? time + ' · ' + p.location : time
+  )
 })
 
 function close() {
@@ -73,7 +104,7 @@ function close() {
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>
       </button>
-      <span class="counter">{{ position }} / {{ total }}</span>
+      <span class="counter">{{ counter }}</span>
       <button class="round" type="button" aria-label="更多">
         <svg
           viewBox="0 0 24 24"
@@ -125,9 +156,13 @@ function close() {
   </main>
 
   <!-- 照片被刪掉或網址打錯時，不要只留一片空白 -->
-  <main v-else class="detail missing">
-    <p>找不到這張照片</p>
+  <main v-else-if="missing || loadError" class="detail missing">
+    <p>{{ missing ? '找不到這張照片' : loadError }}</p>
     <button class="missing-back" type="button" @click="close">回相簿</button>
+  </main>
+
+  <main v-else class="detail missing">
+    <p>載入中…</p>
   </main>
 </template>
 

@@ -1,69 +1,19 @@
 /**
- * 假資料 —— 只為了讓畫面能照設計稿長出來。
- * 後端 API 接上後整個資料夾刪掉。
+ * 假資料 —— 只為了讓還沒接上 API 的畫面能照設計稿長出來。
+ * 每接上一個畫面就刪掉對應的部分，全部接完後整個資料夾刪掉。
  *
- * 相片的 url / thumbnailUrl 刻意留空字串，PhotoTile 會退回設計稿的漸層佔位圖，
- * 等真的有圖再填。
+ * 目前還在用的：祝福留言（BlessingsView）、婚紗集（WeddingGalleryView）。
  */
-import type { AlbumStats, Blessing, Guest, Photo, WeddingCollection } from '@/types/album'
+import type { AlbumStats, Blessing, Guest, WeddingCollection } from '@/types/album'
 
 const guests: Record<string, Guest> = {
-  hui: { id: 'g1', nickname: '小慧', relation: '新娘的大學同學' },
   kai: { id: 'g2', nickname: '阿凱' },
-  ting: { id: 'g3', nickname: '婷婷' },
   ming: { id: 'g4', nickname: '志明' },
   ling: { id: 'g5', nickname: '美玲阿姨' },
-  hong: { id: 'g6', nickname: '建宏' },
   ying: { id: 'g7', nickname: '佳穎' },
-  hao: { id: 'g8', nickname: '俊豪' },
 }
 
-/** 目前登入（輸入暱稱）的賓客 */
-export const currentGuest = guests.hui
-
-function photo(
-  id: string,
-  uploader: Guest,
-  width: number,
-  height: number,
-  extra: Partial<Photo> = {},
-): Photo {
-  return {
-    id,
-    kind: 'photo',
-    url: '',
-    thumbnailUrl: '',
-    width,
-    height,
-    uploader,
-    uploadedAt: '2026-10-17T18:42:00+08:00',
-    likeCount: 0,
-    likedByMe: false,
-    favoritedByMe: false,
-    tags: ['banquet'],
-    ...extra,
-  }
-}
-
-export const feedPhotos: Photo[] = [
-  photo('p1', guests.hui, 3, 4, { tags: ['welcome'] }),
-  photo('p2', guests.kai, 4, 5, {
-    likeCount: 12,
-    location: '婚宴會館',
-    blessing:
-      '俊鴻是我大學最好的兄弟，一路看著他追到鈺婷。今天看到你們穿上禮服，眼淚差點掉下來。祝你們白頭偕老！',
-  }),
-  photo('p3', guests.ting, 1, 1, { tags: ['ceremony'] }),
-  photo('p4', guests.ming, 4, 3, { tags: ['ceremony'] }),
-  photo('p5', guests.ling, 3, 4, { kind: 'video', durationSeconds: 24 }),
-  photo('p6', guests.hong, 4, 5),
-  photo('p7', guests.ying, 1, 1),
-  photo('p8', guests.hao, 3, 4),
-  // 婷婷多傳幾張，賓客照片頁才看得出效果
-  photo('p9', guests.ting, 3, 4, { tags: ['ceremony'] }),
-  photo('p10', guests.ting, 4, 3),
-]
-
+/** 祝福留言頁標題下的「32 位賓客留下了 47 則祝福」 */
 export const stats: AlbumStats = { photoCount: 247, guestCount: 32, blessingCount: 47 }
 
 export const blessings: Blessing[] = [
@@ -100,15 +50,3 @@ export const weddingCollections: WeddingCollection[] = [
   { id: 'w2', title: '棚拍經典', coverUrl: '', photos: [] },
   { id: 'w3', title: '海邊夕陽', coverUrl: '', photos: [] },
 ]
-
-/** 我的個人頁：我上傳的照片 */
-export const myPhotos: Photo[] = [
-  photo('m1', currentGuest, 1, 1),
-  photo('m2', currentGuest, 1, 1),
-  photo('m3', currentGuest, 1, 1),
-  photo('m4', currentGuest, 1, 1),
-  photo('m5', currentGuest, 1, 1),
-  photo('m6', currentGuest, 1, 1),
-]
-
-export const myStats = { uploaded: 12, favorited: 8, likesReceived: 24, blessings: 1 }

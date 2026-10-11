@@ -1,26 +1,54 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { fetchMe, type MyStats } from '@/api/guests'
 import ContinueSheet from '@/components/ContinueSheet.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import ProfileSheet from '@/components/ProfileSheet.vue'
-import { currentGuest, myPhotos, myStats } from '@/mock/sample'
-import { session } from '@/stores/session'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { ensureLoaded, getPhotoList, loadMore } from '@/stores/photoLists'
+import { session, setProfile } from '@/stores/session'
 
-const nickname = computed(() => session.nickname || currentGuest.nickname)
+const nickname = computed(() => session.nickname || '賓客')
 const initial = computed(() => nickname.value[0] ?? '賓')
+
+/** 「我上傳的」= GET /api/photos?uploader=me；點進照片詳情時帶同樣的條件，左右滑只在自己的照片之間 */
+const MINE = { uploader: 'me' }
+const uploaded = getPhotoList(MINE)
+
+const stats = ref<MyStats>({ uploaded: 0, favorited: 0, likesReceived: 0, blessings: 0 })
 
 /** 設計稿的第 4 個 tab 原本標「收藏」，收藏收進這裡當分頁 */
 const tabs = [
-  { id: 'uploaded', label: '我上傳的', count: myStats.uploaded },
-  { id: 'favorites', label: '收藏', count: myStats.favorited },
-  { id: 'blessings', label: '我的祝福', count: myStats.blessings },
+  { id: 'uploaded', label: '我上傳的', stat: 'uploaded' },
+  { id: 'favorites', label: '收藏', stat: 'favorited' },
+  { id: 'blessings', label: '我的祝福', stat: 'blessings' },
 ] as const
 
 const activeTab = ref<(typeof tabs)[number]['id']>('uploaded')
 
 const continueOpen = ref(false)
 const profileOpen = ref(false)
+
+const sentinel = ref<HTMLElement>()
+useInfiniteScroll(sentinel, async () => {
+  if (uploaded.loading) return false
+  await loadMore(MINE)
+  return !uploaded.done && !uploaded.error
+})
+
+onMounted(() => {
+  ensureLoaded(MINE)
+  fetchMe()
+    .then((me) => {
+      stats.value = me.stats
+      // 以後端為準，例如在別的裝置改過名字
+      setProfile(me.guest.nickname, me.guest.relation ?? '')
+    })
+    .catch(() => {
+      // 統計數字拿不到就先顯示 0，不擋住整頁
+    })
+})
 </script>
 
 <template>
@@ -61,17 +89,17 @@ const profileOpen = ref(false)
 
       <div class="stats">
         <div class="stat">
-          <p class="stat-n">{{ myStats.uploaded }}</p>
+          <p class="stat-n">{{ stats.uploaded }}</p>
           <p class="stat-l">已上傳</p>
         </div>
         <span class="stat-sep" />
         <div class="stat">
-          <p class="stat-n">{{ myStats.favorited }}</p>
+          <p class="stat-n">{{ stats.favorited }}</p>
           <p class="stat-l">收藏</p>
         </div>
         <span class="stat-sep" />
         <div class="stat">
-          <p class="stat-n">{{ myStats.likesReceived }}</p>
+          <p class="stat-n">{{ stats.likesReceived }}</p>
           <p class="stat-l">收到的讚</p>
         </div>
       </div>
@@ -86,20 +114,30 @@ const profileOpen = ref(false)
         :class="{ active: activeTab === t.id }"
         @click="activeTab = t.id"
       >
-        {{ t.label }} <span class="tab-n">{{ t.count }}</span>
+        {{ t.label }} <span class="tab-n">{{ stats[t.stat] }}</span>
       </button>
     </nav>
 
-    <div class="grid">
-      <RouterLink
-        v-for="(p, i) in myPhotos"
-        :key="p.id"
-        class="cell"
-        :to="{ name: 'photo-detail', params: { photoId: p.id } }"
-      >
-        <PhotoTile :photo="p" :index="i * 3" ratio="1/1" />
-      </RouterLink>
-    </div>
+    <template v-if="activeTab === 'uploaded'">
+      <div class="grid">
+        <RouterLink
+          v-for="(p, i) in uploaded.items"
+          :key="p.id"
+          class="cell"
+          :to="{ name: 'photo-detail', params: { photoId: p.id }, query: MINE }"
+        >
+          <PhotoTile :photo="p" :index="i * 3" ratio="1/1" />
+        </RouterLink>
+      </div>
+      <p v-if="uploaded.error" class="empty">{{ uploaded.error }}</p>
+      <p v-else-if="uploaded.loaded && uploaded.items.length === 0" class="empty">
+        你還沒有上傳照片
+      </p>
+      <div ref="sentinel" />
+    </template>
+
+    <!-- TODO: 第五步（收藏、祝福）的 API 做好之後接上 -->
+    <p v-else class="empty">即將推出</p>
   </main>
 </template>
 
@@ -286,6 +324,13 @@ const profileOpen = ref(false)
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
+}
+
+.empty {
+  margin: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--c-ink-mute);
 }
 
 .cell {

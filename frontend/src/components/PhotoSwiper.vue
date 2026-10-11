@@ -90,6 +90,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         v-if="Math.abs(i - current) <= 1"
         class="photo"
         :photo="s.photo"
+        full
         :index="s.index ?? i"
         :ratio="String(s.ratio)"
         :style="{ '--ratio': s.ratio }"

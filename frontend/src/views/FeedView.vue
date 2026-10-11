@@ -1,41 +1,74 @@
+<script lang="ts">
+import { ref } from 'vue'
+
+// 放在元件外面：從照片詳情返回首頁時，仍停在原本選的分類
+const activeChip = ref('all')
+</script>
+
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { fetchStats, type PhotoFilter } from '@/api/photos'
 import PhotoTile from '@/components/PhotoTile.vue'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { wedding } from '@/config/wedding'
-import { feedPhotos, stats } from '@/mock/sample'
-import type { PhotoTag } from '@/types/album'
+import { ensureLoaded, filterToQuery, getPhotoList, loadMore, reload } from '@/stores/photoLists'
+import type { AlbumStats } from '@/types/album'
 
-type Filter = { id: string; label: string; tag?: PhotoTag; videoOnly?: boolean; today?: boolean }
+type Chip = { id: string; label: string; filter: PhotoFilter }
 
-const filters: Filter[] = [
-  { id: 'all', label: '全部' },
-  { id: 'today', label: '今天', today: true },
-  { id: 'welcome', label: '迎賓', tag: 'welcome' },
-  { id: 'ceremony', label: '儀式', tag: 'ceremony' },
-  { id: 'banquet', label: '宴客', tag: 'banquet' },
-  { id: 'video', label: '影片', videoOnly: true },
+/** 篩選交給後端（GET /api/photos 的參數），每個 chip 各自是一串快取的列表 */
+const chips: Chip[] = [
+  { id: 'all', label: '全部', filter: {} },
+  { id: 'today', label: '今天', filter: { date: 'today' } },
+  { id: 'welcome', label: '迎賓', filter: { tag: 'welcome' } },
+  { id: 'ceremony', label: '儀式', filter: { tag: 'ceremony' } },
+  { id: 'banquet', label: '宴客', filter: { tag: 'banquet' } },
+  { id: 'video', label: '影片', filter: { kind: 'video' } },
 ]
 
-const activeFilter = ref('all')
+const filter = computed(() => chips.find((c) => c.id === activeChip.value)!.filter)
+const list = computed(() => getPhotoList(filter.value))
 
-const visible = computed(() => {
-  const f = filters.find((x) => x.id === activeFilter.value)
-  if (!f || f.id === 'all') return feedPhotos
-  if (f.videoOnly) return feedPhotos.filter((p) => p.kind === 'video')
-  if (f.tag) return feedPhotos.filter((p) => p.tags.includes(f.tag!))
-  return feedPhotos
+// 兩欄瀑布流：依序左右分配。載入下一頁時只往後加，已經排好的不會跳動
+const columnA = computed(() => list.value.items.filter((_, i) => i % 2 === 0))
+const columnB = computed(() => list.value.items.filter((_, i) => i % 2 === 1))
+
+const stats = ref<AlbumStats | null>(null)
+
+function select(chip: Chip) {
+  activeChip.value = chip.id
+  ensureLoaded(chip.filter)
+}
+
+async function more() {
+  // 正在載入就不重複觸發；載完由那一次負責接著檢查
+  if (list.value.loading) return false
+  await loadMore(filter.value)
+  return !list.value.done && !list.value.error
+}
+
+function retry() {
+  reload(filter.value)
+}
+
+const sentinel = ref<HTMLElement>()
+useInfiniteScroll(sentinel, more)
+
+onMounted(() => {
+  ensureLoaded(filter.value)
+  fetchStats()
+    .then((s) => (stats.value = s))
+    .catch(() => {
+      // 統計數字只是裝飾，拿不到就不顯示
+    })
 })
-
-// 兩欄瀑布流：依序左右分配
-const columnA = computed(() => visible.value.filter((_, i) => i % 2 === 0))
-const columnB = computed(() => visible.value.filter((_, i) => i % 2 === 1))
 
 function ratioOf(p: { width: number; height: number }) {
   return `${p.width}/${p.height}`
 }
 
-function duration(seconds?: number) {
+function duration(seconds?: number | null) {
   if (!seconds) return ''
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
@@ -50,7 +83,9 @@ function duration(seconds?: number) {
           <h1 class="names">
             {{ wedding.groomName }} <span class="amp">&amp;</span> {{ wedding.brideName }}
           </h1>
-          <p class="stats">共 {{ stats.photoCount }} 張回憶 · {{ stats.guestCount }} 位賓客</p>
+          <p v-if="stats" class="stats">
+            共 {{ stats.photoCount }} 張回憶 · {{ stats.guestCount }} 位賓客
+          </p>
         </div>
         <button class="icon-btn" type="button" aria-label="搜尋">
           <svg
@@ -68,14 +103,14 @@ function duration(seconds?: number) {
 
       <div class="chips">
         <button
-          v-for="f in filters"
-          :key="f.id"
+          v-for="c in chips"
+          :key="c.id"
           type="button"
           class="chip"
-          :class="{ active: activeFilter === f.id }"
-          @click="activeFilter = f.id"
+          :class="{ active: activeChip === c.id }"
+          @click="select(c)"
         >
-          {{ f.label }}
+          {{ c.label }}
         </button>
       </div>
     </header>
@@ -86,9 +121,9 @@ function duration(seconds?: number) {
           v-for="p in columnA"
           :key="p.id"
           class="card"
-          :to="{ name: 'photo-detail', params: { photoId: p.id } }"
+          :to="{ name: 'photo-detail', params: { photoId: p.id }, query: filterToQuery(filter) }"
         >
-          <PhotoTile :photo="p" :index="feedPhotos.indexOf(p)" :ratio="ratioOf(p)">
+          <PhotoTile :photo="p" :index="list.items.indexOf(p)" :ratio="ratioOf(p)">
             <span v-if="p.kind === 'video'" class="video-badge">
               <svg viewBox="0 0 12 12" fill="#fff"><path d="M3 2v8l7-4z" /></svg>
               {{ duration(p.durationSeconds) }}
@@ -105,9 +140,9 @@ function duration(seconds?: number) {
           v-for="p in columnB"
           :key="p.id"
           class="card"
-          :to="{ name: 'photo-detail', params: { photoId: p.id } }"
+          :to="{ name: 'photo-detail', params: { photoId: p.id }, query: filterToQuery(filter) }"
         >
-          <PhotoTile :photo="p" :index="feedPhotos.indexOf(p)" :ratio="ratioOf(p)">
+          <PhotoTile :photo="p" :index="list.items.indexOf(p)" :ratio="ratioOf(p)">
             <span v-if="p.kind === 'video'" class="video-badge">
               <svg viewBox="0 0 12 12" fill="#fff"><path d="M3 2v8l7-4z" /></svg>
               {{ duration(p.durationSeconds) }}
@@ -120,10 +155,43 @@ function duration(seconds?: number) {
         </RouterLink>
       </div>
     </div>
+
+    <p v-if="list.loaded && list.items.length === 0" class="status">
+      {{ activeChip === 'all' ? '還沒有照片，成為第一個分享回憶的人吧' : '這個分類還沒有照片' }}
+    </p>
+    <p v-else-if="list.error" class="status">
+      {{ list.error }}
+      <button class="retry" type="button" @click="retry">重試</button>
+    </p>
+    <p v-else-if="list.loading" class="status">載入中…</p>
+
+    <!-- 捲到這裡附近就載入下一頁 -->
+    <div ref="sentinel" class="sentinel" />
   </main>
 </template>
 
 <style scoped>
+.status {
+  margin: 24px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--c-ink-mute);
+}
+
+.retry {
+  margin-left: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-ink);
+}
+
+.sentinel {
+  height: 1px;
+}
+
 .feed {
   background: var(--c-bg);
   min-height: 100dvh;

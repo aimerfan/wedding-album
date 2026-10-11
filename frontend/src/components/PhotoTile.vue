@@ -3,8 +3,7 @@ import { computed } from 'vue'
 import type { Photo } from '@/types/album'
 
 /**
- * 相片格。還沒有真實圖檔時，退回設計稿的柔和漸層佔位圖。
- * 等後端接上、photo.thumbnailUrl 有值就會自動換成真圖。
+ * 相片格。漸層佔位圖墊在底下：沒有圖檔時直接顯示它，有圖檔時在載入完成前先看到它。
  */
 const props = withDefaults(
   defineProps<{
@@ -14,6 +13,8 @@ const props = withDefaults(
     /** CSS aspect-ratio，例如 '4/5'；'auto' 表示由外層控制高度 */
     ratio?: string
     label?: string
+    /** 載原圖而不是縮圖。只有放大檢視（照片詳情、婚紗集）才用 */
+    full?: boolean
   }>(),
   { ratio: '4/5', index: 0 },
 )
@@ -32,7 +33,7 @@ const GRADIENTS: [string, string][] = [
   ['#D6BCA9', '#9D7B62'],
 ]
 
-const src = computed(() => props.photo?.thumbnailUrl || '')
+const src = computed(() => (props.full ? props.photo?.url : props.photo?.thumbnailUrl) || '')
 
 const gradient = computed(() => {
   const [a, b] = GRADIENTS[(props.index ?? 0) % GRADIENTS.length]
@@ -43,7 +44,7 @@ const aspectRatio = computed(() => (props.ratio === 'auto' ? undefined : props.r
 </script>
 
 <template>
-  <div class="tile" :style="{ aspectRatio, background: src ? undefined : gradient }">
+  <div class="tile" :style="{ aspectRatio, background: gradient }">
     <img v-if="src" :src="src" :alt="photo?.blessing ?? ''" loading="lazy" decoding="async" />
     <div v-else class="texture" />
     <span v-if="label" class="label">{{ label }}</span>

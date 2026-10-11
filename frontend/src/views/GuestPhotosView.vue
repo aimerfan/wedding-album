@@ -1,18 +1,28 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import PhotoTile from '@/components/PhotoTile.vue'
-import { feedPhotos } from '@/mock/sample'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { ensureLoaded, getPhotoList, loadMore } from '@/stores/photoLists'
 
-/**
- * 某位賓客拍的所有照片。從照片詳情點上傳者進來。
- * 接上 API 後改成 GET /api/photos?uploader=<guestId>。
- */
+/** 某位賓客拍的所有照片。從照片詳情點上傳者進來。對應 GET /api/photos?uploader=<guestId> */
 const props = defineProps<{ guestId: string }>()
 const router = useRouter()
 
-const photos = computed(() => feedPhotos.filter((p) => p.uploader.id === props.guestId))
+const filter = computed(() => ({ uploader: props.guestId }))
+const list = computed(() => getPhotoList(filter.value))
+const photos = computed(() => list.value.items)
+// 賓客資料直接取第一張照片上的上傳者，不必另外要
 const guest = computed(() => photos.value[0]?.uploader)
+
+watch(filter, (f) => ensureLoaded(f), { immediate: true })
+
+const sentinel = ref<HTMLElement>()
+useInfiniteScroll(sentinel, async () => {
+  if (list.value.loading) return false
+  await loadMore(filter.value)
+  return !list.value.done && !list.value.error
+})
 
 function back() {
   if (window.history.state?.back) router.back()
@@ -42,22 +52,26 @@ function back() {
         <span class="avatar">{{ guest.nickname[0] }}</span>
         <h1 class="name">{{ guest.nickname }}</h1>
         <p v-if="guest.relation" class="relation">{{ guest.relation }}</p>
-        <p class="count">拍了 {{ photos.length }} 張照片</p>
+        <p class="count">拍了 {{ photos.length }}{{ list.done ? '' : '+' }} 張照片</p>
       </section>
 
       <div class="grid">
         <RouterLink
-          v-for="p in photos"
+          v-for="(p, i) in photos"
           :key="p.id"
           class="cell"
           :to="{ name: 'photo-detail', params: { photoId: p.id }, query: { uploader: guestId } }"
         >
-          <PhotoTile :photo="p" :index="feedPhotos.indexOf(p)" ratio="1/1" />
+          <PhotoTile :photo="p" :index="i" ratio="1/1" />
         </RouterLink>
       </div>
     </template>
 
-    <p v-else class="empty">找不到這位賓客的照片</p>
+    <p v-else-if="list.error" class="empty">{{ list.error }}</p>
+    <p v-else-if="list.loaded" class="empty">找不到這位賓客的照片</p>
+    <p v-else class="empty">載入中…</p>
+
+    <div ref="sentinel" />
   </main>
 </template>
 
