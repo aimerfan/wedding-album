@@ -39,6 +39,10 @@ export function setUnauthorizedHandler(handler: () => void) {
 export function toApiError(status: number, data: unknown): ApiError {
   const error = (data as { error?: { code?: string; message?: string } } | null)?.error
   if (status === 401 && session.token) onUnauthorized()
+  // 502/503/504 又沒有後端的錯誤內容：請求根本沒到 Flask（後端沒開、正在重啟、主機掛了）
+  if (!error && status >= 502 && status <= 504) {
+    return new ApiError(status, 'server_unavailable', '暫時連不上伺服器，請稍後再試')
+  }
   return new ApiError(
     status,
     error?.code ?? 'unknown_error',
