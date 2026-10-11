@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import ContinueSheet from '@/components/ContinueSheet.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import { currentGuest, myPhotos, myStats } from '@/mock/sample'
 import { session } from '@/stores/session'
@@ -16,25 +17,29 @@ const tabs = [
 ] as const
 
 const activeTab = ref<(typeof tabs)[number]['id']>('uploaded')
+
+const continueOpen = ref(false)
 </script>
 
 <template>
   <main class="me">
     <div class="backdrop" />
 
-    <RouterLink :to="{ name: 'feed' }" class="qr" aria-label="分享 QR Code">
+    <button class="qr" type="button" aria-label="在其他裝置繼續" @click="continueOpen = true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
         <rect x="3" y="3" width="7" height="7" rx="1" />
         <rect x="14" y="3" width="7" height="7" rx="1" />
         <rect x="3" y="14" width="7" height="7" rx="1" />
         <path d="M14 14h3v3M21 14v3M14 21h3M21 18v3" />
       </svg>
-    </RouterLink>
+    </button>
+
+    <ContinueSheet v-model="continueOpen" />
 
     <header class="profile">
       <span class="avatar">{{ initial }}</span>
       <h1 class="name">{{ nickname }}</h1>
-      <p class="relation">{{ currentGuest.relation }}</p>
+      <p v-if="session.relation" class="relation">{{ session.relation }}</p>
 
       <div class="stats">
         <div class="stat">
@@ -107,6 +112,8 @@ const activeTab = ref<(typeof tabs)[number]['id']>('uploaded')
   border-radius: 18px;
   background: var(--c-card);
   border: 1px solid var(--c-line);
+  padding: 0;
+  color: var(--c-ink);
   display: flex;
   align-items: center;
   justify-content: center;
