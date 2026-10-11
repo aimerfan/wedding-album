@@ -59,6 +59,9 @@ export const feedPhotos: Photo[] = [
   photo('p6', guests.hong, 4, 5),
   photo('p7', guests.ying, 1, 1),
   photo('p8', guests.hao, 3, 4),
+  // 婷婷多傳幾張，賓客照片頁才看得出效果
+  photo('p9', guests.ting, 3, 4, { tags: ['ceremony'] }),
+  photo('p10', guests.ting, 4, 3),
 ]
 
 export const stats: AlbumStats = { photoCount: 247, guestCount: 32, blessingCount: 47 }

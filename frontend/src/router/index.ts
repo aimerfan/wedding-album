@@ -6,7 +6,7 @@ import { session } from '@/stores/session'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // 有底部 tab bar 的四個主畫面
+    // 有底部 tab bar 的畫面：四個主畫面，加上從相簿點進去的賓客照片頁
     {
       path: '/',
       component: TabLayout,
@@ -23,6 +23,12 @@ const router = createRouter({
           component: () => import('@/views/BlessingsView.vue'),
         },
         { path: 'me', name: 'me', component: () => import('@/views/MeView.vue') },
+        {
+          path: 'guests/:guestId',
+          name: 'guest-photos',
+          component: () => import('@/views/GuestPhotosView.vue'),
+          props: true,
+        },
       ],
     },
 

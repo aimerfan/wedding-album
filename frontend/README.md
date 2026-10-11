@@ -26,7 +26,7 @@ npm run dev
 - `@/` 指向 `src/`。
 - 色票與版面尺寸的唯一來源是 `src/assets/tokens.css`，不要在元件裡寫死顏色。
   `docs/design/extracted/` 裡的 `A` 物件是設計稿的凍結快照，不是現行來源。
-- `src/mock/` 是為了讓畫面長出來的假資料，目前五支 view 直接 import 它。
+- `src/mock/` 是為了讓畫面長出來的假資料，目前各支 view 直接 import 它。
   接上 API 後整個資料夾要刪掉。
 
 ## PWA

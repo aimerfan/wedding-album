@@ -1,19 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
 import { feedPhotos, myPhotos, stats } from '@/mock/sample'
 
 const props = defineProps<{ photoId: string }>()
+const route = useRoute()
 const router = useRouter()
 
-/**
- * 左右滑動要在哪一串照片裡換張：從「我的」點進來就只在我上傳的之間滑。
- * 假資料階段用 id 判斷；接上 API 後改成依網址上的篩選條件（例如 ?uploader=me）向後端要列表。
- */
-const list = computed(() =>
-  myPhotos.some((p) => p.id === props.photoId) ? myPhotos : feedPhotos,
+/** 從某位賓客的照片頁點進來時帶 ?uploader=<guestId>，左右滑只在他拍的照片之間換 */
+const uploaderId = computed(() =>
+  typeof route.query.uploader === 'string' ? route.query.uploader : null,
 )
+
+/**
+ * 左右滑動要在哪一串照片裡換張。
+ * 「我的」那串目前用 id 判斷；接上 API 後統一改成依 ?uploader= 向後端要列表（對應 GET /api/photos?uploader=）。
+ */
+const list = computed(() => {
+  if (uploaderId.value) return feedPhotos.filter((p) => p.uploader.id === uploaderId.value)
+  return myPhotos.some((p) => p.id === props.photoId) ? myPhotos : feedPhotos
+})
 
 const index = computed(() => list.value.findIndex((p) => p.id === props.photoId))
 const photo = computed(() => list.value[index.value])
@@ -31,7 +38,9 @@ const current = computed({
   get: () => index.value,
   set: (i) => {
     const next = list.value[i]
-    if (next) router.replace({ name: 'photo-detail', params: { photoId: next.id } })
+    if (next) {
+      router.replace({ name: 'photo-detail', params: { photoId: next.id }, query: route.query })
+    }
   },
 })
 
@@ -88,11 +97,20 @@ function close() {
       <span class="grip" />
 
       <div class="uploader">
-        <span class="avatar">{{ photo.uploader.nickname[0] }}</span>
-        <div class="who">
-          <p class="name">{{ photo.uploader.nickname }}</p>
-          <p class="meta">{{ takenLabel }}</p>
-        </div>
+        <RouterLink
+          class="who"
+          :to="{ name: 'guest-photos', params: { guestId: photo.uploader.id } }"
+          :aria-label="'看' + photo.uploader.nickname + '拍的所有照片'"
+        >
+          <span class="avatar">{{ photo.uploader.nickname[0] }}</span>
+          <div class="who-text">
+            <p class="name">{{ photo.uploader.nickname }}</p>
+            <p class="meta">{{ takenLabel }}</p>
+          </div>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </RouterLink>
         <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 21s-7-5-7-11a4 4 0 017-2.5A4 4 0 0119 10c0 6-7 11-7 11z" />
         </svg>
@@ -223,6 +241,16 @@ function close() {
 
 .who {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--c-ink-mute);
 }
 
 .name {
