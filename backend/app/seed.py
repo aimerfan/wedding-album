@@ -8,6 +8,8 @@ import shutil
 from datetime import timedelta
 
 import click
+from flask import current_app
+from flask.cli import with_appcontext
 from PIL import Image, ImageChops
 
 from app import images, storage
@@ -77,8 +79,13 @@ def _size(w_ratio: int, h_ratio: int) -> tuple[int, int]:
 
 @click.command("seed")
 @click.option("--reset", is_flag=True, help="先清空所有賓客、照片與照片檔")
+@with_appcontext
 def seed_command(reset: bool):
     """建立開發用的測試賓客與照片。"""
+    # --reset 會清掉所有賓客的照片，正式環境絕對不能跑
+    if not current_app.debug:
+        raise click.ClickException("seed 只能在開發模式執行（在 backend/ 底下用 flask 指令會自動進入）")
+
     if reset:
         db.drop_all()
         db.create_all()
