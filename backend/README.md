@@ -5,7 +5,6 @@ Python 3.14 + Flask。API 規格寫在 [docs/api.md](../docs/api.md)（目前是
 ## 環境需求
 
 Python 3.14。套件用 pip + `requirements.txt` 管理。
-pip 隨 Python 一起安裝，不必另外裝，也不限定版本——套件版本已經在 `requirements.txt` 裡釘死。
 
 ## 第一次設定
 
@@ -15,15 +14,11 @@ pip 隨 Python 一起安裝，不必另外裝，也不限定版本——套件�
 py -3.14 -m venv .venv
 ```
 
-```bash
-.venv\Scripts\activate
-```
+啟動虛擬環境（Git Bash 用 `source .venv/Scripts/activate`，cmd 用 `.venv\Scripts\activate`），再安裝套件：
 
 ```bash
 pip install -r requirements-dev.txt
 ```
-
-之後每次開新的終端機，只要再執行一次 `.venv\Scripts\activate` 啟動虛擬環境。
 
 | 指令 | 用途 |
 | --- | --- |
