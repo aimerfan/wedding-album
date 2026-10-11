@@ -60,7 +60,7 @@ def create_blessing():
         photo = db.session.get(Photo, photo_id) if isinstance(photo_id, str) else None
         if photo is None:
             raise ApiError(404, "photo_not_found", "找不到這張照片")
-        # 照片上的祝福會顯示成「來自 OOO 的祝福」，只有上傳者自己能掛
+        # 照片上的祝福顯示在上傳者名字下方，看起來就是上傳者說的，所以只有上傳者自己能掛
         if photo.uploader_id != g.guest.id:
             raise ApiError(403, "not_your_photo", "只能在自己上傳的照片附上祝福")
 
