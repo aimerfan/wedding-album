@@ -9,6 +9,7 @@ import type { UploadDraft } from '@/types/album'
 const NICKNAME_KEY = 'wedding-album:nickname'
 const RELATION_KEY = 'wedding-album:relation'
 const TOKEN_KEY = 'wedding-album:token'
+const GUEST_ID_KEY = 'wedding-album:guest-id'
 const EVENT_CODE_KEY = 'wedding-album:event-code'
 
 function read(key: string): string {
@@ -45,6 +46,8 @@ function initialEventCode(): string {
 export const session = reactive({
   /** 後端發的身分代號。有它才算加入了相簿，見 docs/api.md 的「身分」 */
   token: read(TOKEN_KEY),
+  /** 自己的賓客 id，用來判斷哪些祝福是自己寫的（才顯示修改、刪除） */
+  guestId: read(GUEST_ID_KEY),
   eventCode: initialEventCode(),
   /** 賓客自己輸入的暱稱，這個 app 沒有帳號密碼 */
   nickname: read(NICKNAME_KEY),
@@ -65,10 +68,17 @@ export function setToken(token: string) {
   write(TOKEN_KEY, token)
 }
 
-/** token 失效時清掉。暱稱留著，重新加入時歡迎頁可以直接帶入 */
+export function setGuestId(id: string) {
+  session.guestId = id
+  write(GUEST_ID_KEY, id)
+}
+
+/** token 失效時清掉身分。暱稱留著，重新加入時歡迎頁可以直接帶入 */
 export function clearToken() {
   session.token = ''
+  session.guestId = ''
   write(TOKEN_KEY, '')
+  write(GUEST_ID_KEY, '')
 }
 
 /** 使用者從系統選取器挑到的檔案 */

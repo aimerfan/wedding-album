@@ -15,6 +15,4 @@ export const wedding = {
   venue: '婚宴會館',
   /** 單次上傳張數上限 */
   maxUploadCount: 30,
-  /** 祝福語字數上限 */
-  maxBlessingLength: 200,
 } as const

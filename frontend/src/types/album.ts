@@ -60,7 +60,9 @@ export interface Blessing {
   text: string
   /** ISO 8601 */
   createdAt: string
-  photoId?: PhotoId
+  /** 最後一次修改的時間，沒改過是 null。用來標示「已編輯」 */
+  editedAt?: string | null
+  photoId?: PhotoId | null
 }
 
 /** 婚紗集的一個系列，例如「陽明山外景」。僅供觀賞，不開放下載。 */
@@ -78,6 +80,8 @@ export interface AlbumStats {
   photoCount: number
   guestCount: number
   blessingCount: number
+  /** 留過祝福的人數（含預先匯入的），留言牆標題用 */
+  blessingGuestCount: number
 }
 
 export type UploadStatus = 'pending' | 'uploading' | 'succeeded' | 'failed'

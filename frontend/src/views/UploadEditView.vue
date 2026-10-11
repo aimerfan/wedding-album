@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { createBlessing } from '@/api/blessings'
 import { ApiError } from '@/api/client'
 import { fetchConfig } from '@/api/config'
 import { uploadPhoto } from '@/api/upload'
-import { wedding } from '@/config/wedding'
+import { useAlbumConfig } from '@/composables/useAlbumConfig'
+import { addBlessing } from '@/stores/blessingLists'
 import { invalidateAll } from '@/stores/photoLists'
 import { resetUploadFlow, session, uploadFlow, type PickedMedia } from '@/stores/session'
 import type { PhotoTag, UploadStatus } from '@/types/album'
 
 const router = useRouter()
+const albumConfig = useAlbumConfig()
 
 /** 跟首頁的篩選 chips 同一套分類 */
 const tagOptions: { id: PhotoTag; label: string }[] = [
@@ -47,6 +50,8 @@ interface Task {
   /** 0–100 */
   progress: number
   errorMessage?: string
+  /** 上傳成功後拿到的照片 id，祝福要掛在第一張上 */
+  photoId?: string
 }
 
 /** 每張照片的上傳狀態，key 是 PickedMedia.id */
@@ -68,8 +73,12 @@ const failedMessage = computed(() => {
   return `有 ${failedCount.value} 張沒有傳成功：${reason}`
 })
 
+/** 照片都傳完了，但祝福沒送出去 */
+const blessingError = ref('')
+
 const submitLabel = computed(() => {
   if (running.value) return `上 傳 中 ${doneCount.value} / ${count.value}`
+  if (blessingError.value) return '重 新 送 出 祝 福'
   if (failedCount.value > 0) return `重 試 ${failedCount.value} 張`
   return `上 傳 ${count.value} 張 照 片`
 })
@@ -106,8 +115,8 @@ async function upload() {
 
       task.status = 'uploading'
       try {
-        await uploadPhoto(item.file, tag, (percent) => (task.progress = percent))
-        Object.assign(task, { status: 'succeeded', progress: 100 })
+        const photo = await uploadPhoto(item.file, tag, (percent) => (task.progress = percent))
+        Object.assign(task, { status: 'succeeded', progress: 100, photoId: photo.id })
       } catch (e) {
         const message = e instanceof ApiError ? e.message : '上傳失敗，請稍後再試'
         Object.assign(task, { status: 'failed', errorMessage: message })
@@ -122,11 +131,31 @@ async function upload() {
   running.value = false
 
   if (doneCount.value > 0) invalidateAll()
-  if (failedCount.value === 0) finish()
+  if (failedCount.value === 0) await finish()
 }
 
-function finish() {
-  // TODO: 第五步（祝福）做好之後，在這裡用第一張成功的 id 呼叫 POST /api/blessings 送出祝福
+/**
+ * 照片傳完之後：有寫祝福就送出，掛在這批第一張成功的照片上（只送一次，
+ * 不然一次傳 10 張，同一句祝福會在留言牆出現 10 次）。送出失敗就留在這頁，照片不必重傳。
+ */
+async function finish() {
+  const text = uploadFlow.draft.blessing.trim()
+  const first = selected.value.map((p) => tasks[p.id]?.photoId).find(Boolean)
+  if (text && first) {
+    running.value = true
+    blessingError.value = ''
+    try {
+      addBlessing(await createBlessing(text, first))
+      invalidateAll() // 照片上多了祝福
+    } catch (e) {
+      blessingError.value =
+        '照片都上傳好了，但祝福沒有送出：' +
+        (e instanceof ApiError ? e.message : '請稍後再試')
+      return
+    } finally {
+      running.value = false
+    }
+  }
   resetUploadFlow()
   router.push({ name: 'feed' })
 }
@@ -187,6 +216,7 @@ onBeforeRouteLeave(() => {
           ＋
         </button>
       </div>
+      <p v-if="blessingError" class="upload-error" role="alert">{{ blessingError }}</p>
       <p v-if="failedMessage" class="upload-error" role="alert">
         {{ failedMessage }}
         <!-- 壞掉的檔案怎麼重試都不會成功，給一條出路 -->
@@ -221,7 +251,7 @@ onBeforeRouteLeave(() => {
         <textarea
           v-model="uploadFlow.draft.blessing"
           class="blessing"
-          :maxlength="wedding.maxBlessingLength"
+          :maxlength="albumConfig.maxBlessingLength"
           placeholder="願你們的愛情&#10;如同今日的天氣&#10;晴朗、明亮、永遠溫暖"
           rows="4"
         />
@@ -232,7 +262,7 @@ onBeforeRouteLeave(() => {
             <button type="button" @click="uploadFlow.draft.blessing += '♡'">♡</button>
             <button type="button" @click="uploadFlow.draft.blessing += '✿'">✿</button>
           </div>
-          <span class="counter">{{ blessingLength }} / {{ wedding.maxBlessingLength }}</span>
+          <span class="counter">{{ blessingLength }} / {{ albumConfig.maxBlessingLength }}</span>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 /** 身分相關的 API。見 docs/api.md 的「身分」。 */
+import { session, setGuestId, setProfile } from '@/stores/session'
 import type { Guest } from '@/types/album'
 import { api } from './client'
 
@@ -28,4 +29,15 @@ export interface MyStats {
 
 export function fetchMe() {
   return api<{ guest: Guest; stats: MyStats }>('/me')
+}
+
+/**
+ * 確定手機上記得自己的賓客 id。這個功能加上之前就已經加入的賓客沒有存 id，
+ * 問一次後端補上。已經有了就什麼都不做。
+ */
+export async function ensureGuestId() {
+  if (!session.token || session.guestId) return
+  const me = await fetchMe()
+  setGuestId(me.guest.id)
+  setProfile(me.guest.nickname, me.guest.relation ?? '')
 }

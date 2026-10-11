@@ -6,7 +6,7 @@ import { joinAlbum, updateMe } from '@/api/guests'
 import PhotoTile from '@/components/PhotoTile.vue'
 import DecoDivider from '@/components/DecoDivider.vue'
 import { wedding } from '@/config/wedding'
-import { session, setProfile, setToken } from '@/stores/session'
+import { session, setGuestId, setProfile, setToken } from '@/stores/session'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +38,7 @@ async function enter() {
           return r
         })
     setProfile(guest.nickname, guest.relation ?? '')
+    setGuestId(guest.id)
 
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     // 只接受站內路徑，避免被帶去別的網站
