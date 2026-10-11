@@ -3,8 +3,16 @@ import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { wedding } from '@/config/wedding'
 import { resetUploadFlow, session, uploadFlow } from '@/stores/session'
+import type { PhotoTag } from '@/types/album'
 
 const router = useRouter()
+
+/** 跟首頁的篩選 chips 同一套分類 */
+const tagOptions: { id: PhotoTag; label: string }[] = [
+  { id: 'welcome', label: '迎賓' },
+  { id: 'ceremony', label: '儀式' },
+  { id: 'banquet', label: '宴客' },
+]
 
 const selected = computed(() =>
   uploadFlow.selectedIds
@@ -110,16 +118,20 @@ function skip() {
         </div>
       </div>
 
-      <div class="settings">
-        <label class="setting">
-          <span>允許其他賓客看到</span>
-          <input v-model="uploadFlow.draft.visibleToGuests" type="checkbox" class="switch" />
-        </label>
-        <label class="setting last">
-          <span>附加位置：{{ wedding.venue }}</span>
-          <input v-model="uploadFlow.draft.attachLocation" type="checkbox" class="switch" />
-        </label>
-      </div>
+      <fieldset class="settings">
+        <legend class="settings-label">這些照片是在哪個環節拍的？</legend>
+        <div class="tags">
+          <label
+            v-for="t in tagOptions"
+            :key="t.id"
+            class="tag"
+            :class="{ active: uploadFlow.draft.tag === t.id }"
+          >
+            <input v-model="uploadFlow.draft.tag" type="radio" name="tag" :value="t.id" />
+            {{ t.label }}
+          </label>
+        </div>
+      </fieldset>
     </section>
 
     <div class="submit-bar">
@@ -359,57 +371,55 @@ function skip() {
 }
 
 .settings {
-  margin-top: 14px;
+  margin: 14px 0 0;
+  padding: 12px 16px 14px;
   border-radius: 12px;
   border: 1px solid var(--c-line);
   background: var(--c-card);
-  overflow: hidden;
 }
 
-.setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--c-line);
+.settings-label {
+  float: left;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 0;
   font-size: 13px;
 }
 
-.setting.last {
-  border-bottom: 0;
+.tags {
+  clear: both;
+  display: flex;
+  gap: 8px;
 }
 
-/* iOS 風格開關：用原生 checkbox 保留可存取性，外觀自己畫 */
-.switch {
-  appearance: none;
-  width: 36px;
-  height: 22px;
-  border-radius: 11px;
-  background: var(--c-bg-deep);
-  position: relative;
-  transition: background 0.2s;
-  flex-shrink: 0;
+/* 單選用原生 radio 保留可存取性，外觀畫成 chip */
+.tag {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 16px;
+  border: 1px solid var(--c-line-strong);
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
+  cursor: pointer;
 }
 
-.switch::after {
-  content: '';
+.tag input {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: left 0.2s;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.switch:checked {
+.tag.active {
+  border-color: transparent;
   background: var(--c-rose);
+  color: #fff;
 }
 
-.switch:checked::after {
-  left: 16px;
+.tag:has(input:focus-visible) {
+  outline: 2px solid var(--c-rose-soft);
+  outline-offset: 2px;
 }
 
 .submit-bar {

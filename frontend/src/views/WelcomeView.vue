@@ -4,15 +4,18 @@ import { useRouter } from 'vue-router'
 import PhotoTile from '@/components/PhotoTile.vue'
 import DecoDivider from '@/components/DecoDivider.vue'
 import { wedding } from '@/config/wedding'
-import { setNickname } from '@/stores/session'
+import { session, setProfile } from '@/stores/session'
 
 const router = useRouter()
-const name = ref('')
+
+// 從上傳頁按「更改」回來時，帶入原本填的內容
+const name = ref(session.nickname)
+const relation = ref(session.relation)
 
 function enter() {
   const trimmed = name.value.trim()
   if (!trimmed) return
-  setNickname(trimmed)
+  setProfile(trimmed, relation.value.trim())
   router.push({ name: 'feed' })
 }
 </script>
@@ -50,6 +53,19 @@ function enter() {
           autocomplete="nickname"
           enterkeyhint="go"
           maxlength="20"
+          @keyup.enter="enter"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field-label">與新人的關係（選填）</span>
+        <input
+          v-model="relation"
+          type="text"
+          class="field-input"
+          placeholder="例如：新娘的大學同學"
+          enterkeyhint="go"
+          maxlength="30"
           @keyup.enter="enter"
         />
       </label>

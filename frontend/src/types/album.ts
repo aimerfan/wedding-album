@@ -89,8 +89,6 @@ export interface UploadTask {
 /** 上傳流程第二步（寫祝福）收集到的設定 */
 export interface UploadDraft {
   blessing: string
-  /** 允許其他賓客看到 */
-  visibleToGuests: boolean
-  /** 附加拍攝位置 */
-  attachLocation: boolean
+  /** 這批照片是哪個環節拍的。多數賓客只參加宴客，預設 'banquet' */
+  tag: PhotoTag
 }
