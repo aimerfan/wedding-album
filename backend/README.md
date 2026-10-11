@@ -25,7 +25,8 @@ pip install -r requirements-dev.txt
 | 指令 | 用途 |
 | --- | --- |
 | `flask run` | 開發伺服器（http://localhost:5000），改程式會自動重啟 |
-| `flask seed` | 建立測試用的賓客與照片，並印出兩組 token。加 `--reset` 會先清空所有資料 |
+| `flask seed` | 建立測試用的賓客、照片、祝福與讚，並印出兩組 token。加 `--reset` 會先清空所有資料。只能在開發模式執行 |
+| `flask import-blessings 檔案.csv` | 匯入婚禮前收到的祝福留言，見下方「預先匯入祝福」。加 `--dry-run` 只預覽不寫入 |
 | `pytest` | 跑全部測試 |
 
 ## 結構
@@ -41,7 +42,9 @@ backend/
 │   ├── auth.py        # 發 token、驗 token（@require_guest）
 │   ├── storage.py     # 照片檔的存放與網址，換雲端儲存只改這裡
 │   ├── images.py      # 照片轉檔：轉正方向、讀拍攝時間、產生顯示用與縮圖
+│   ├── pagination.py  # 列表 API 共用的 cursor 分頁
 │   ├── seed.py        # flask seed 的測試資料
+│   ├── import_blessings.py  # flask import-blessings
 │   └── api/           # 一類功能一個模組，都掛在 /api 底下
 ├── tests/
 ├── .flaskenv              # flask 指令的開發設定（只放可公開的內容）
@@ -68,6 +71,23 @@ backend/
 - 啟動時會自動建立還不存在的資料表，但**不會修改已存在的資料表**。
   改了 `app/models.py` 既有的欄位後，刪掉 `instance/wedding.db` 再啟動即可（開發資料會一起清掉）。
 - 正式上線前會加上 migration 工具，屆時改欄位就不必刪資料庫。
+
+## 預先匯入祝福
+
+婚禮前收到的祝福（卡片、訊息）整理成 CSV，用 `flask import-blessings` 匯入，會出現在留言牆上。
+正式環境也能執行。
+
+```
+名字,祝福,關係
+阿凱,祝你們白頭偕老！,新郎的大學室友
+美玲阿姨,新婚快樂,
+```
+
+- 「名字」「祝福」必填，「關係」可以留空或整欄省略。用 Excel 存成「CSV UTF-8」即可。
+- 檔案裡的順序就是留言牆上的順序，第一列在最上面。
+- 任何一列有問題，整批都不匯入，並列出是哪幾列。
+- 重複匯入同一個檔案不會重複新增。
+- 匯入的作者不能登入；之後同名的人用手機加入，會是另一位賓客。
 
 ## 慣例
 
