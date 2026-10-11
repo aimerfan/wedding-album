@@ -24,7 +24,7 @@ const chips: Chip[] = [
   { id: 'welcome', label: '迎賓', filter: { tag: 'welcome' } },
   { id: 'ceremony', label: '儀式', filter: { tag: 'ceremony' } },
   { id: 'banquet', label: '宴客', filter: { tag: 'banquet' } },
-  { id: 'video', label: '影片', filter: { kind: 'video' } },
+  // 目前不開放影片，「影片」chip 先拿掉；開放時加回 { kind: 'video' }
 ]
 
 const filter = computed(() => chips.find((c) => c.id === activeChip.value)!.filter)
