@@ -161,3 +161,15 @@ def test_production_without_event_code_refuses_to_start(monkeypatch):
 
     with pytest.raises(RuntimeError):
         create_app({"SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+
+
+def test_me_counts_my_uploads(client, join, add_photo):
+    token, me = join("小慧")
+    _, other = join("阿凱")
+    add_photo(me["id"])
+    add_photo(me["id"])
+    add_photo(other["id"])
+
+    stats = client.get("/api/me", headers=auth(token)).get_json()["stats"]
+
+    assert stats["uploaded"] == 2

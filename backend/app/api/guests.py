@@ -1,12 +1,13 @@
 """身分相關：加入相簿、目前這位賓客的資料。"""
 
 from flask import g, jsonify, request
+from sqlalchemy import func
 
 from app.api import bp
 from app.auth import check_event_code, new_token, require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import NICKNAME_MAX, RELATION_MAX, Guest
+from app.models import NICKNAME_MAX, RELATION_MAX, Guest, Photo
 
 
 def _json_body() -> dict:
@@ -58,11 +59,14 @@ def create_guest():
 @bp.get("/me")
 @require_guest
 def get_me():
+    uploaded = db.session.scalar(
+        db.select(func.count()).select_from(Photo).where(Photo.uploader_id == g.guest.id)
+    )
     return jsonify(
         {
             "guest": g.guest.to_json(),
-            # TODO: 照片、收藏、祝福做好之後改成真的數字
-            "stats": {"uploaded": 0, "favorited": 0, "likesReceived": 0, "blessings": 0},
+            # TODO: 收藏、讚、祝福做好之後改成真的數字
+            "stats": {"uploaded": uploaded, "favorited": 0, "likesReceived": 0, "blessings": 0},
         }
     )
 
