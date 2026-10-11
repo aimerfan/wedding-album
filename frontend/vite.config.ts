@@ -78,7 +78,7 @@ export default defineConfig({
     },
   },
   server: {
-    // 開發時把 /api 轉給本機的 Flask（backend/），前端程式一律寫相對路徑 /api/...，不必處理 CORS
-    proxy: { '/api': 'http://localhost:5000' },
+    // 開發時把 /api 與照片檔 /media 轉給本機的 Flask（backend/），前端一律寫相對路徑，不必處理 CORS
+    proxy: { '/api': 'http://localhost:5000', '/media': 'http://localhost:5000' },
   },
 })
