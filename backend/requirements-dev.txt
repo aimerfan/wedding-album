@@ -1,0 +1,7 @@
+# 開發時才需要的套件，正式環境不裝。
+# 安裝：pip install -r requirements-dev.txt（會連同 requirements.txt 一起裝）
+
+-r requirements.txt
+
+# 測試
+pytest==9.1.1
