@@ -9,6 +9,8 @@ export interface PhotoFilter {
   date?: 'today'
   /** 'me' 或某位賓客的 id */
   uploader?: string
+  /** 只列我收藏的（「我的 → 收藏」） */
+  favorited?: 'true'
 }
 
 export function fetchPhotos(filter: PhotoFilter, cursor?: string | null, limit = 30) {
@@ -23,4 +25,16 @@ export function fetchPhoto(id: string) {
 
 export function fetchStats() {
   return api<AlbumStats>('/stats')
+}
+
+const photoPath = (id: string, action: string) => `/photos/${encodeURIComponent(id)}/${action}`
+
+/** 按讚 / 收回讚。用 PUT / DELETE，重複按、網路重送都安全。回傳更新後的照片 */
+export function setLiked(id: string, liked: boolean) {
+  return api<Photo>(photoPath(id, 'like'), { method: liked ? 'PUT' : 'DELETE' })
+}
+
+/** 收藏 / 取消收藏。收藏是私人的，只有自己看得到 */
+export function setFavorited(id: string, favorited: boolean) {
+  return api<Photo>(photoPath(id, 'favorite'), { method: favorited ? 'PUT' : 'DELETE' })
 }

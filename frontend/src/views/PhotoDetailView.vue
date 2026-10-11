@@ -2,9 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
-import { fetchPhoto } from '@/api/photos'
+import { fetchPhoto, setFavorited, setLiked } from '@/api/photos'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
-import { ensureLoaded, filterFromQuery, getPhotoList, loadMore } from '@/stores/photoLists'
+import { ensureLoaded, filterFromQuery, getPhotoList, loadMore, updatePhoto } from '@/stores/photoLists'
 import type { Photo } from '@/types/album'
 
 const props = defineProps<{ photoId: string }>()
@@ -94,6 +94,53 @@ function close() {
   if (window.history.state?.back) router.back()
   else router.push({ name: 'feed' })
 }
+
+// --- 按讚、收藏 -----------------------------------------------------------
+
+/** 把更新後的照片換進所有列表（以及單獨抓來的那張），畫面上每個地方的數字才一致 */
+function apply(p: Photo) {
+  updatePhoto(p)
+  if (single.value?.id === p.id) single.value = p
+}
+
+const actionError = ref('')
+/** 同一張照片的請求還沒回來前，不接受下一次點擊，避免回應順序錯亂 */
+const pending = new Set<string>()
+
+/**
+ * 先把畫面改掉（樂觀更新），按下去立刻有反應；再送給後端，以後端回傳的為準。
+ * 失敗就改回原樣並顯示原因。
+ */
+async function toggle(change: (p: Photo) => Photo, send: (p: Photo) => Promise<Photo>) {
+  const before = photo.value
+  if (!before || pending.has(before.id)) return
+  pending.add(before.id)
+  actionError.value = ''
+  const optimistic = change(before)
+  apply(optimistic)
+  try {
+    apply(await send(optimistic))
+  } catch (e) {
+    apply(before)
+    actionError.value = e instanceof ApiError ? e.message : '操作失敗，請稍後再試'
+  } finally {
+    pending.delete(before.id)
+  }
+}
+
+function toggleLike() {
+  toggle(
+    (p) => ({ ...p, likedByMe: !p.likedByMe, likeCount: p.likeCount + (p.likedByMe ? -1 : 1) }),
+    (p) => setLiked(p.id, p.likedByMe),
+  )
+}
+
+function toggleFavorite() {
+  toggle(
+    (p) => ({ ...p, favoritedByMe: !p.favoritedByMe }),
+    (p) => setFavorited(p.id, p.favoritedByMe),
+  )
+}
 </script>
 
 <template>
@@ -142,14 +189,48 @@ function close() {
             <path d="M9 6l6 6-6 6" />
           </svg>
         </RouterLink>
-        <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 21s-7-5-7-11a4 4 0 017-2.5A4 4 0 0119 10c0 6-7 11-7 11z" />
-        </svg>
-        <span class="likes">{{ photo.likeCount }}</span>
+        <button
+          class="action"
+          type="button"
+          :aria-pressed="photo.favoritedByMe"
+          :aria-label="photo.favoritedByMe ? '取消收藏' : '收藏'"
+          @click="toggleFavorite"
+        >
+          <svg
+            class="bookmark"
+            :class="{ on: photo.favoritedByMe }"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linejoin="round"
+          >
+            <path d="M6 3h12v18l-6-4-6 4z" />
+          </svg>
+        </button>
+        <button
+          class="action"
+          type="button"
+          :aria-pressed="photo.likedByMe"
+          :aria-label="photo.likedByMe ? '收回讚' : '按讚'"
+          @click="toggleLike"
+        >
+          <svg
+            class="heart"
+            :class="{ on: photo.likedByMe }"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.8"
+          >
+            <path d="M12 21s-7-5-7-11a4 4 0 017-2.5A4 4 0 0119 10c0 6-7 11-7 11z" />
+          </svg>
+          <span class="likes">{{ photo.likeCount }}</span>
+        </button>
       </div>
+      <p v-if="actionError" class="action-error" role="alert">{{ actionError }}</p>
 
       <div v-if="photo.blessing" class="blessing">
-        <span class="blessing-tag">來自{{ photo.uploader.nickname }}的祝福</span>
+        <!-- 上傳者就在正上方，這裡不再重複名字；標籤留著是為了卡片上緣的缺口裝飾 -->
+        <span class="blessing-tag">祝福</span>
         <p class="blessing-text">{{ photo.blessing }}</p>
       </div>
     </section>
@@ -301,14 +382,53 @@ function close() {
   color: var(--c-ink-mute);
 }
 
+.action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+}
+
+/* 沒按過是空心，按過填滿 */
+.heart,
+.bookmark {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  transition: transform 0.15s;
+}
+
 .heart {
-  width: 18px;
-  height: 18px;
   color: var(--c-rose);
 }
 
+.bookmark {
+  color: var(--c-ink-soft);
+}
+
+.heart.on,
+.bookmark.on {
+  fill: currentColor;
+}
+
+.action:active .heart,
+.action:active .bookmark {
+  transform: scale(0.85);
+}
+
 .likes {
+  min-width: 1.5em;
   font-size: 12px;
+  text-align: left;
+}
+
+.action-error {
+  margin: -6px 0 10px;
+  font-size: 11px;
+  color: var(--c-rose);
 }
 
 .blessing {

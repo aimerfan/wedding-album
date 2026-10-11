@@ -19,6 +19,8 @@ export interface PhotoList {
   done: boolean
   loading: boolean
   error: string
+  /** 內容已經過時（例如收藏有變），下次顯示時要從頭重新載入 */
+  stale: boolean
 }
 
 const lists = new Map<string, { state: PhotoList; filter: PhotoFilter }>()
@@ -45,6 +47,7 @@ function entry(filter: PhotoFilter) {
         done: false,
         loading: false,
         error: '',
+        stale: false,
       }),
     }
     lists.set(key, found)
@@ -78,9 +81,10 @@ export async function loadMore(filter: PhotoFilter) {
   }
 }
 
-/** 第一次進來才載入；之前載過就沿用，回到列表時不會閃一下又重來 */
+/** 第一次進來才載入；之前載過就沿用，回到列表時不會閃一下又重來。過時了才重新載入 */
 export function ensureLoaded(filter: PhotoFilter) {
   const { state } = entry(filter)
+  if (state.stale) return reload(filter)
   if (!state.loaded) return loadMore(filter)
 }
 
@@ -91,6 +95,7 @@ export async function reload(filter: PhotoFilter) {
   state.nextCursor = null
   state.loaded = false
   state.done = false
+  state.stale = false
   await loadMore(filter)
 }
 
@@ -109,6 +114,7 @@ export function filterFromQuery(query: Record<string, unknown>): PhotoFilter {
   if (pick('date') === 'today') filter.date = 'today'
   const uploader = pick('uploader')
   if (uploader) filter.uploader = uploader
+  if (pick('favorited') === 'true') filter.favorited = 'true'
   return filter
 }
 
@@ -129,5 +135,25 @@ export function invalidateAll() {
     state.loaded = false
     state.done = false
     state.error = ''
+  }
+}
+
+/**
+ * 某張照片變了（按讚、收藏），把每一串列表裡的那張都換成新的，回到列表時數字才對。
+ *
+ * 收藏的列表要增減照片，但不在這裡立刻動：從「收藏」點進照片詳情後取消收藏，
+ * 正在看的那張突然消失會很怪。所以只標記成過時，回到收藏頁時再重新載入。
+ */
+export function updatePhoto(photo: Photo) {
+  for (const [key, { state }] of lists) {
+    const i = state.items.findIndex((p) => p.id === photo.id)
+    if (i >= 0) {
+      if (state.items[i]!.favoritedByMe !== photo.favoritedByMe && key.includes('favorited=true')) {
+        state.stale = true
+      }
+      state.items[i] = photo
+    } else if (photo.favoritedByMe && key.includes('favorited=true')) {
+      state.stale = true
+    }
   }
 }
