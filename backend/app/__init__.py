@@ -29,7 +29,12 @@ def create_app(overrides: dict | None = None) -> Flask:
             )
         app.config["EVENT_CODE"] = DEV_EVENT_CODE
 
-    # 中文直接輸出，不要轉成 中 這種跳脫字元
+    # 整個請求的大小上限 = 單張照片上限（預設 30 MB）+ 1 MB 給表單的其他欄位（例如 tag）。
+    # 超過這個大小的請求，Flask 在讀進記憶體之前就直接回 413，
+    # 所以就算有人故意傳一個超大的檔案，也不會先被整個收進伺服器的記憶體
+    app.config["MAX_CONTENT_LENGTH"] = app.config["MAX_PHOTO_BYTES"] + 1024 * 1024
+
+    # 中文直接輸出，不要轉成 \u 開頭的跳脫字元
     app.json.ensure_ascii = False
 
     errors.register(app)

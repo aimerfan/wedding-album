@@ -54,6 +54,7 @@ def add_photo(app):
                 height=height,
                 uploaded_at=uploaded_at or now(),
                 original_key="photos/x/original.jpg",
+                display_key="photos/x/display.jpg",
                 thumb_key="photos/x/thumb.jpg",
             )
             db.session.add(photo)

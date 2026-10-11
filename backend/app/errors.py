@@ -23,6 +23,10 @@ _DEFAULT_MESSAGES = {
 }
 
 
+# Werkzeug 名稱不直覺的，改成前端好判斷的代碼
+_CODE_OVERRIDES = {413: "file_too_large"}
+
+
 class ApiError(Exception):
     """在路由裡 raise 這個，就會回傳指定的錯誤。
 
@@ -49,7 +53,7 @@ def register(app: Flask) -> None:
     def handle_http_error(e: HTTPException):
         status = e.code or 500
         # Werkzeug 的名稱是 "Not Found" 這種格式，轉成 not_found
-        code = (e.name or "error").lower().replace(" ", "_")
+        code = _CODE_OVERRIDES.get(status) or (e.name or "error").lower().replace(" ", "_")
         return _body(status, code, _DEFAULT_MESSAGES.get(status, "發生錯誤"))
 
     @app.errorhandler(Exception)

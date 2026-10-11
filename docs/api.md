@@ -21,7 +21,7 @@
 
 ### 照片網址
 
-- 回應裡的 `url`、`thumbnailUrl`、`coverUrl` 都是**可以直接使用的網址**：開發時是 `/media/...` 這樣的路徑，
+- 回應裡的 `url`、`displayUrl`、`thumbnailUrl` 都是**可以直接使用的網址**：開發時是 `/media/...` 這樣的路徑，
   換成雲端儲存後會是 `https://...` 的完整網址。前端兩種都直接放進 `<img src>` 即可。
 - 前端不自己組網址。後端換儲存位置（本機磁碟 → 雲端）時，前端完全不用改。
 
@@ -105,8 +105,9 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 {
   "id": "p_1",
   "kind": "photo",
-  "url": "https://…/p_1.jpg",
-  "thumbnailUrl": "https://…/p_1_thumb.jpg",
+  "url": "https://…/p_1/original.heic",
+  "displayUrl": "https://…/p_1/display.jpg",
+  "thumbnailUrl": "https://…/p_1/thumb.jpg",
   "width": 3024,
   "height": 4032,
   "durationSeconds": null,
@@ -123,7 +124,11 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 - `kind`：`photo` 或 `video`。`durationSeconds` 只有影片才有。**目前不開放上傳影片**，所以一律是 `photo`；
   欄位先保留，之後開放影片時前端不必改。
-- `width` / `height`：原圖尺寸，前端拿來算比例排版，**一定要有**。
+- 三種網址，**依用途選用**：
+  - `thumbnailUrl`：長邊 480px 的 JPEG。**列表一律用這個。**
+  - `displayUrl`：長邊 1600px 的 JPEG。**照片詳情等放大檢視用這個。**
+  - `url`：原檔，格式就是賓客上傳的格式（可能是 HEIC，很多瀏覽器打不開）。只用在下載與匯出，**不要拿來顯示**。
+- `width` / `height`：原圖尺寸（已依拍攝方向轉正），前端拿來算比例排版，**一定要有**。
 - `takenAt`：從 EXIF 讀出來的拍攝時間，讀不到就是 `null`。
 - `tag`：`welcome`（迎賓）、`ceremony`（儀式）、`banquet`（宴客）其中一個，上傳時由賓客選。
 - `likedByMe`：我有沒有按讚。讚是**公開的**，所有人都看得到 `likeCount`，會算進上傳者的「獲得的讚」。
@@ -148,23 +153,19 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 `photoId` 為 `null` 代表是留言牆上的獨立祝福，沒有附照片。
 
-### WeddingCollection / WeddingPhoto
+### WeddingPhoto
 
-婚紗照是新人自己的照片，沒有上傳者、按讚、收藏，所以**不沿用 Photo**，另外定義：
+婚紗照是新人自己的照片，沒有上傳者、按讚、收藏，所以**不沿用 Photo**，另外定義。
+婚紗集**不分系列**，所有婚紗照是同一串，依匯入時的檔名排序。
 
 ```json
-{
-  "id": "w_1",
-  "title": "陽明山外景",
-  "caption": "陽明山 · 2026 春末 · 共 24 張",
-  "coverUrl": "https://…/w_1_cover.jpg",
-  "photos": [
-    { "id": "wp_1", "url": "https://…", "thumbnailUrl": "https://…", "width": 3000, "height": 2000 }
-  ]
-}
+{ "id": "wp_1", "displayUrl": "https://…", "thumbnailUrl": "https://…", "width": 3000, "height": 2000 }
 ```
 
-> 跟前端現況的差異：`album.ts` 的 `WeddingCollection.photos` 目前是 `Photo[]`，定案後要改成 `WeddingPhoto[]`。
+婚紗集僅供觀賞，所以**不提供原檔網址**。
+
+> 跟前端現況的差異：`album.ts` 的 `WeddingCollection`（分系列）要改成直接一串 `WeddingPhoto[]`，
+> 婚紗集頁的系列 chips 也要拿掉。
 
 ## API 列表
 
@@ -294,6 +295,16 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 回應 `201`，內容是建立好的 Photo。
 
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `file_required` | `400` | 沒帶檔案 |
+| `invalid_tag` | `400` | 分類不正確 |
+| `uploads_closed` | `403` | 相簿已截止上傳（`uploadsOpen: false`） |
+| `file_too_large` | `413` | 超過單檔上限 |
+| `unsupported_format` | `415` | 不是支援的照片格式。**看檔案內容判斷**，副檔名、Content-Type 改了也沒用 |
+| `video_not_supported` | `415` | 傳了影片（目前不開放） |
+| `too_many_uploads` | `429` | 一小時內傳太多 |
+
 祝福**不跟著照片一起送**：所有檔案都傳完後，前端再呼叫一次 `POST /api/blessings` 並帶上第一張的 `photoId`。
 否則一次傳 10 張，同一句祝福會在留言牆上出現 10 次。
 
@@ -362,9 +373,13 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 | 方法 | 路徑 | 用途 |
 | --- | --- | --- |
-| `GET` | `/api/collections` | 所有系列，含每個系列的照片 |
+| `GET` | `/api/wedding-photos` | 所有婚紗照 |
 
-婚紗照只有幾十張，一次全部回傳，不分頁。
+```json
+{ "items": [ { "id": "wp_1", ... } ] }
+```
+
+婚紗照只有幾十張，一次全部回傳，不分頁（沒有 `nextCursor`）。
 
 ## 待確認
 

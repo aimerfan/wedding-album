@@ -71,6 +71,7 @@ class Photo(db.Model):
     uploaded_at: Mapped[datetime] = mapped_column(default=now, index=True)
     # 檔案在儲存層的位置（見 app/storage.py），不是網址
     original_key: Mapped[str] = mapped_column(String(128))
+    display_key: Mapped[str] = mapped_column(String(128))
     thumb_key: Mapped[str] = mapped_column(String(128))
 
     uploader: Mapped[Guest] = relationship(lazy="joined")
@@ -80,6 +81,7 @@ class Photo(db.Model):
             "id": self.id,
             "kind": self.kind,
             "url": storage.url(self.original_key),
+            "displayUrl": storage.url(self.display_key),
             "thumbnailUrl": storage.url(self.thumb_key),
             "width": self.width,
             "height": self.height,

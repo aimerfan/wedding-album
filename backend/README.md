@@ -40,7 +40,7 @@ backend/
 │   ├── models.py      # 資料表
 │   ├── auth.py        # 發 token、驗 token（@require_guest）
 │   ├── storage.py     # 照片檔的存放與網址，換雲端儲存只改這裡
-│   ├── images.py      # 縮圖規格
+│   ├── images.py      # 照片轉檔：轉正方向、讀拍攝時間、產生顯示用與縮圖
 │   ├── seed.py        # flask seed 的測試資料
 │   └── api/           # 一類功能一個模組，都掛在 /api 底下
 ├── tests/

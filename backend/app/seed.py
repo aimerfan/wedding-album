@@ -116,12 +116,15 @@ def seed_command(reset: bool):
             height=height,
             uploaded_at=started + timedelta(minutes=10 * i),
             original_key="",
+            display_key="",
             thumb_key="",
         )
         db.session.add(photo)
         db.session.flush()  # 拿到 photo.id 才能決定檔名
 
         photo.original_key = f"photos/{photo.id}/original.jpg"
+        # 測試用的原圖本來就只有 1600px，顯示用的直接用原圖
+        photo.display_key = photo.original_key
         photo.thumb_key = f"photos/{photo.id}/thumb.jpg"
         storage.save(photo.original_key, images.to_jpeg(image))
         storage.save(photo.thumb_key, images.make_thumbnail(image))

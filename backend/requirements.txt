@@ -14,3 +14,6 @@ Flask-SQLAlchemy==3.1.1
 
 # 圖片處理：讀尺寸、產生縮圖
 Pillow==12.3.0
+
+# 讓 Pillow 讀得懂 iPhone 的 HEIC 照片
+pillow-heif==1.8.1
