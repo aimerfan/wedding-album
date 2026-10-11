@@ -11,3 +11,6 @@ Flask==3.1.3
 # 資料庫：SQLAlchemy 負責 SQL，Flask-SQLAlchemy 負責把連線綁到每個請求上
 SQLAlchemy==2.1.4
 Flask-SQLAlchemy==3.1.1
+
+# 圖片處理：讀尺寸、產生縮圖
+Pillow==12.3.0

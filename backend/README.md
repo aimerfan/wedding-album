@@ -20,9 +20,12 @@ py -3.14 -m venv .venv
 pip install -r requirements-dev.txt
 ```
 
+`flask` 指令會自動讀 `.flaskenv`，以開發模式啟動，所以不必加 `--app app --debug`。
+
 | 指令 | 用途 |
 | --- | --- |
-| `flask --app app run --debug` | 開發伺服器（http://localhost:5000），改程式會自動重啟 |
+| `flask run` | 開發伺服器（http://localhost:5000），改程式會自動重啟 |
+| `flask seed` | 建立測試用的賓客與照片，並印出兩組 token。加 `--reset` 會先清空所有資料 |
 | `pytest` | 跑全部測試 |
 
 ## 結構
@@ -36,8 +39,12 @@ backend/
 │   ├── db.py          # 資料庫連線
 │   ├── models.py      # 資料表
 │   ├── auth.py        # 發 token、驗 token（@require_guest）
+│   ├── storage.py     # 照片檔的存放與網址，換雲端儲存只改這裡
+│   ├── images.py      # 縮圖規格
+│   ├── seed.py        # flask seed 的測試資料
 │   └── api/           # 一類功能一個模組，都掛在 /api 底下
 ├── tests/
+├── .flaskenv              # flask 指令的開發設定（只放可公開的內容）
 ├── requirements.txt       # 正式環境的套件
 └── requirements-dev.txt   # 開發用（pytest 等），會連同 requirements.txt 一起裝
 ```
@@ -46,14 +53,18 @@ backend/
 
 | 名稱 | 預設 | 說明 |
 | --- | --- | --- |
-| `EVENT_CODE` | 開發時為 `dev` | QR code 網址裡的活動碼。**正式環境沒設會拒絕啟動** |
+| `EVENT_CODE` | 開發時為 `dev` | QR code 網址裡的活動碼。**沒設又不是開發模式就拒絕啟動** |
 | `DATABASE_URL` | `sqlite:///wedding.db` | 相對路徑放在 `instance/` 底下 |
+| `MEDIA_DIR` | `instance/media/` | 照片檔存放的資料夾 |
+| `MEDIA_BASE_URL` | `/media` | 回給前端的照片網址開頭。換成雲端儲存時改成 CDN 網址 |
 
 各種上限（同時上傳數、檔案大小、截止上傳）也都能用環境變數調整，名稱見 `app/config.py`。
 
 ## 資料庫
 
-- 開發用的資料庫在 `instance/wedding.db`，已被 git 忽略。
+- 開發用的資料庫在 `instance/wedding.db`，照片檔在 `instance/media/`，都已被 git 忽略。
+- 時間一律以**不帶時區的 UTC** 存進資料庫，回給前端時才轉成台灣時間（`+08:00`）。
+- 開發時照片檔由 Flask 的 `/media/...` 送出；正式環境改由網頁伺服器或雲端儲存直接提供。
 - 啟動時會自動建立還不存在的資料表，但**不會修改已存在的資料表**。
   改了 `app/models.py` 既有的欄位後，刪掉 `instance/wedding.db` 再啟動即可（開發資料會一起清掉）。
 - 正式上線前會加上 migration 工具，屆時改欄位就不必刪資料庫。

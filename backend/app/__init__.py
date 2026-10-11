@@ -23,7 +23,10 @@ def create_app(overrides: dict | None = None) -> Flask:
     if not app.config["EVENT_CODE"]:
         # 正式環境忘了設活動碼，等於任何人輸入 "dev" 都能進來，寧可啟動失敗
         if not (app.debug or app.testing):
-            raise RuntimeError("正式環境必須設定環境變數 EVENT_CODE")
+            raise RuntimeError(
+                "沒有設定環境變數 EVENT_CODE。正式環境一定要設；"
+                "開發時請在 backend/ 底下執行 flask 指令（會讀 .flaskenv 進入開發模式）"
+            )
         app.config["EVENT_CODE"] = DEV_EVENT_CODE
 
     # 中文直接輸出，不要轉成 中 這種跳脫字元
@@ -34,10 +37,12 @@ def create_app(overrides: dict | None = None) -> Flask:
     os.makedirs(app.instance_path, exist_ok=True)
     db.init_app(app)
 
-    from app import models  # noqa: F401  讓 create_all 知道有哪些資料表
+    from app import models, seed, storage  # noqa: F401  models：讓 create_all 知道有哪些資料表
     from app.api import bp
 
     app.register_blueprint(bp)
+    app.register_blueprint(storage.bp)
+    app.cli.add_command(seed.seed_command)
 
     with app.app_context():
         # 只會建立還不存在的資料表，不會動到已有的資料。

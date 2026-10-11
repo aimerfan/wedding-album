@@ -5,3 +5,6 @@
 
 # 測試
 pytest==9.1.1
+
+# 讓 flask 指令自動讀 .flaskenv（開發模式、app 位置），不必每次打 --app app --debug
+python-dotenv==1.2.4

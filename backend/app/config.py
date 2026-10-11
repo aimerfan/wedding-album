@@ -28,6 +28,10 @@ def load() -> dict:
         "SQLALCHEMY_DATABASE_URI": os.environ.get("DATABASE_URL", "sqlite:///wedding.db"),
         # QR code 網址裡的活動碼。正式環境一定要設；開發與測試時沒設就用 "dev"
         "EVENT_CODE": os.environ.get("EVENT_CODE", ""),
+        # 照片檔放哪裡。空字串代表 backend/instance/media/
+        "MEDIA_DIR": os.environ.get("MEDIA_DIR", ""),
+        # 回給前端的照片網址開頭。換成雲端儲存時改成 CDN 網址即可，前端不用動
+        "MEDIA_BASE_URL": os.environ.get("MEDIA_BASE_URL", "/media"),
         "MAX_PHOTO_BYTES": _int("MAX_PHOTO_BYTES", 30 * MB),
         "MAX_VIDEO_BYTES": _int("MAX_VIDEO_BYTES", 200 * MB),
         "MAX_UPLOADS_PER_HOUR": _int("MAX_UPLOADS_PER_HOUR", 300),
