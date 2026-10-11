@@ -12,7 +12,7 @@ from app.api import bp
 from app.auth import require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import PHOTO_TAGS, TAIPEI, Guest, Photo, now
+from app.models import PHOTO_TAGS, TAIPEI, Guest, Photo
 
 DEFAULT_LIMIT = 30
 MAX_LIMIT = 100
@@ -49,7 +49,8 @@ def _limit() -> int:
 
 def _today_range_utc() -> tuple[datetime, datetime]:
     """台灣時間「今天」的起訖，換成資料庫裡存的 UTC（不帶時區）。"""
-    today = now().astimezone(TAIPEI).date()
+    # now() 是不帶時區的 UTC，不能直接 astimezone（會被當成電腦本地時間），這裡直接取台灣時間
+    today = datetime.now(TAIPEI).date()
     start = datetime.combine(today, time.min, tzinfo=TAIPEI).astimezone(UTC).replace(tzinfo=None)
     return start, start + timedelta(days=1)
 

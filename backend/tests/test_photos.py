@@ -154,6 +154,21 @@ def test_filter_today(client, me, add_photo):
     assert _ids(_list(client, token, date="today")) == [today]
 
 
+def test_today_means_taiwan_date(client, me, add_photo):
+    # 「今天」以台灣時間的午夜為界。UTC 與台灣差 8 小時，凌晨時段最容易算錯
+    from datetime import UTC, datetime, time
+
+    from app.models import TAIPEI
+
+    token, guest = me
+    midnight = datetime.combine(datetime.now(TAIPEI).date(), time.min, tzinfo=TAIPEI)
+    midnight_utc = midnight.astimezone(UTC).replace(tzinfo=None)
+    just_after = add_photo(guest["id"], uploaded_at=midnight_utc + timedelta(minutes=1))
+    add_photo(guest["id"], uploaded_at=midnight_utc - timedelta(minutes=1))
+
+    assert _ids(_list(client, token, date="today")) == [just_after]
+
+
 def test_filter_video_returns_nothing_for_now(client, me, add_photo):
     # 目前不開放影片上傳
     token, guest = me
