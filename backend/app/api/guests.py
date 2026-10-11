@@ -7,7 +7,7 @@ from app.api import bp
 from app.auth import check_event_code, new_token, require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import NICKNAME_MAX, RELATION_MAX, Guest, Photo
+from app.models import NICKNAME_MAX, RELATION_MAX, Blessing, Favorite, Guest, Like, Photo
 
 
 def _json_body() -> dict:
@@ -59,14 +59,32 @@ def create_guest():
 @bp.get("/me")
 @require_guest
 def get_me():
-    uploaded = db.session.scalar(
-        db.select(func.count()).select_from(Photo).where(Photo.uploader_id == g.guest.id)
-    )
+    me = g.guest.id
+
+    def count(query):
+        return db.session.scalar(query)
+
     return jsonify(
         {
             "guest": g.guest.to_json(),
-            # TODO: 收藏、讚、祝福做好之後改成真的數字
-            "stats": {"uploaded": uploaded, "favorited": 0, "likesReceived": 0, "blessings": 0},
+            "stats": {
+                "uploaded": count(
+                    db.select(func.count()).select_from(Photo).where(Photo.uploader_id == me)
+                ),
+                "favorited": count(
+                    db.select(func.count()).select_from(Favorite).where(Favorite.guest_id == me)
+                ),
+                # 別人在我上傳的照片按的讚
+                "likesReceived": count(
+                    db.select(func.count())
+                    .select_from(Like)
+                    .join(Photo, Like.photo_id == Photo.id)
+                    .where(Photo.uploader_id == me)
+                ),
+                "blessings": count(
+                    db.select(func.count()).select_from(Blessing).where(Blessing.guest_id == me)
+                ),
+            },
         }
     )
 

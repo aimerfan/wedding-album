@@ -15,7 +15,7 @@ from PIL import Image, ImageChops
 from app import images, storage
 from app.auth import new_token
 from app.db import db
-from app.models import Guest, Photo, now
+from app.models import Blessing, Guest, Like, Photo, now
 
 # (暱稱, 與新人的關係)
 GUESTS = [
@@ -44,6 +44,17 @@ PHOTOS = [
     (0, 4, 5, "banquet"),
     (1, 3, 2, "banquet"),
 ]
+
+# (作者在 GUESTS 的位置, 祝福, 掛在第幾張照片上或 None)。照片必須是作者自己上傳的
+BLESSINGS = [
+    (1, "俊鴻是我大學最好的兄弟，一路看著他追到鈺婷。今天看到你們穿上禮服，眼淚差點掉下來。祝你們白頭偕老！", 1),
+    (4, "從小看著婷婷長大，今天看到她當新娘真的好美。願你們的婚姻甜甜蜜蜜，早生貴子。", None),
+    (3, "恭喜恭喜！", None),
+    (6, "兩個人在一起的樣子真好看。 ♥", None),
+]
+
+# (按讚的人在 GUESTS 的位置, 第幾張照片)
+LIKES = [(0, 1), (2, 1), (3, 1), (5, 1), (0, 2), (4, 6), (6, 6)]
 
 # 跟前端 PhotoTile 的佔位漸層同一組顏色
 GRADIENTS = [
@@ -105,6 +116,7 @@ def seed_command(reset: bool):
 
     # 最早的一張在 2 小時前，之後每 10 分鐘一張
     started = now() - timedelta(hours=2)
+    photos = []
     for i, (guest_index, w, h, tag) in enumerate(PHOTOS):
         width, height = _size(w, h)
         image = _gradient(width, height, GRADIENTS[i % len(GRADIENTS)])
@@ -120,6 +132,7 @@ def seed_command(reset: bool):
             thumb_key="",
         )
         db.session.add(photo)
+        photos.append(photo)
         db.session.flush()  # 拿到 photo.id 才能決定檔名
 
         photo.original_key = f"photos/{photo.id}/original.jpg"
@@ -129,9 +142,24 @@ def seed_command(reset: bool):
         storage.save(photo.original_key, images.to_jpeg(image))
         storage.save(photo.thumb_key, images.make_thumbnail(image))
 
+    for i, (guest_index, text, photo_index) in enumerate(BLESSINGS):
+        db.session.add(
+            Blessing(
+                guest=guests[guest_index],
+                text=text,
+                photo_id=photos[photo_index].id if photo_index is not None else None,
+                # 第一則最新
+                created_at=now() - timedelta(minutes=5 * i),
+            )
+        )
+    for guest_index, photo_index in LIKES:
+        db.session.add(Like(guest_id=guests[guest_index].id, photo_id=photos[photo_index].id))
+
     db.session.commit()
 
-    click.echo(f"建立了 {len(guests)} 位賓客、{len(PHOTOS)} 張照片。")
+    click.echo(
+        f"建立了 {len(guests)} 位賓客、{len(PHOTOS)} 張照片、{len(BLESSINGS)} 則祝福、{len(LIKES)} 個讚。"
+    )
     click.echo(f"照片檔在 {storage.media_dir()}")
     click.echo("")
     click.echo("測試用 token（打 API 時放在 Authorization: Bearer <token>）：")

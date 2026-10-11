@@ -1,51 +1,27 @@
 """相簿：照片列表、單張照片、首頁統計。"""
 
-import base64
-import binascii
-import json
 from datetime import UTC, datetime, time, timedelta
 
 from flask import current_app, g, jsonify, request
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func
 
 from app import images, storage
 from app.api import bp
 from app.auth import require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import PHOTO_TAGS, TAIPEI, Guest, Photo, now
-
-DEFAULT_LIMIT = 30
-MAX_LIMIT = 100
-
-
-# --- cursor ---------------------------------------------------------------
-# cursor 記的是「上一頁最後一張」的上傳時間與 id。對前端來說只是一串看不懂的字，原樣傳回來即可。
-# 用時間 + id 兩個欄位，是因為同一秒可能有好幾張，只靠時間會漏掉或重複。
-
-
-def _encode_cursor(photo: Photo) -> str:
-    raw = json.dumps({"t": photo.uploaded_at.isoformat(), "id": photo.id})
-    return base64.urlsafe_b64encode(raw.encode()).decode()
-
-
-def _decode_cursor(cursor: str) -> tuple[datetime, str]:
-    try:
-        data = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-        return datetime.fromisoformat(data["t"]), str(data["id"])
-    except (binascii.Error, ValueError, KeyError, TypeError) as e:
-        raise ApiError(400, "invalid_cursor", "分頁參數不正確") from e
-
-
-def _limit() -> int:
-    raw = request.args.get("limit")
-    if raw is None:
-        return DEFAULT_LIMIT
-    try:
-        value = int(raw)
-    except ValueError as e:
-        raise ApiError(400, "invalid_limit", "limit 必須是數字") from e
-    return max(1, min(value, MAX_LIMIT))
+from app.models import (
+    PHOTO_TAGS,
+    TAIPEI,
+    Blessing,
+    Favorite,
+    Guest,
+    Like,
+    Photo,
+    now,
+    photos_to_json,
+)
+from app.pagination import paginate
 
 
 def _today_range_utc() -> tuple[datetime, datetime]:
@@ -84,30 +60,14 @@ def list_photos():
     if uploader := args.get("uploader"):
         query = query.where(Photo.uploader_id == (g.guest.id if uploader == "me" else uploader))
 
-    if args.get("favorited"):
-        # TODO: 第五步（收藏）做好之後實作
-        raise ApiError(501, "not_implemented", "收藏功能還沒做好")
-
-    if cursor := args.get("cursor"):
-        t, last_id = _decode_cursor(cursor)
-        query = query.where(
-            or_(Photo.uploaded_at < t, and_(Photo.uploaded_at == t, Photo.id < last_id))
+    if args.get("favorited") == "true":
+        # 收藏是私人的，只能看自己的
+        query = query.join(
+            Favorite, (Favorite.photo_id == Photo.id) & (Favorite.guest_id == g.guest.id)
         )
 
-    limit = _limit()
-    # 多拿一張，用來判斷還有沒有下一頁
-    rows = db.session.scalars(
-        query.order_by(Photo.uploaded_at.desc(), Photo.id.desc()).limit(limit + 1)
-    ).all()
-    has_more = len(rows) > limit
-    items = rows[:limit]
-
-    return jsonify(
-        {
-            "items": [p.to_json() for p in items],
-            "nextCursor": _encode_cursor(items[-1]) if has_more else None,
-        }
-    )
+    items, next_cursor = paginate(query, Photo.uploaded_at, Photo.id)
+    return jsonify({"items": photos_to_json(items, g.guest.id), "nextCursor": next_cursor})
 
 
 @bp.post("/photos")
@@ -171,27 +131,77 @@ def upload_photo():
     storage.save(photo.thumb_key, processed.thumb_jpeg)
     db.session.commit()
 
-    return jsonify(photo.to_json()), 201
+    return jsonify(photo.to_json(g.guest.id)), 201
+
+
+def _get_photo_or_404(photo_id: str) -> Photo:
+    photo = db.session.get(Photo, photo_id)
+    if photo is None:
+        raise ApiError(404, "photo_not_found", "找不到這張照片")
+    return photo
 
 
 @bp.get("/photos/<photo_id>")
 @require_guest
 def get_photo(photo_id: str):
-    photo = db.session.get(Photo, photo_id)
-    if photo is None:
-        raise ApiError(404, "photo_not_found", "找不到這張照片")
-    return jsonify(photo.to_json())
+    return jsonify(_get_photo_or_404(photo_id).to_json(g.guest.id))
+
+
+# --- 按讚、收藏 -----------------------------------------------------------
+# 用 PUT / DELETE 而不是「切換」：重複按、網路不穩重送，結果都一樣，不會讚了又被收回。
+# 回應是更新後的照片，前端直接拿來換掉畫面上的那張。
+
+
+def _set_mark(model, photo_id: str, on: bool):
+    photo = _get_photo_or_404(photo_id)
+    existing = db.session.get(model, (g.guest.id, photo.id))
+    if on and existing is None:
+        db.session.add(model(guest_id=g.guest.id, photo_id=photo.id))
+    elif not on and existing is not None:
+        db.session.delete(existing)
+    db.session.commit()
+    return jsonify(photo.to_json(g.guest.id))
+
+
+@bp.put("/photos/<photo_id>/like")
+@require_guest
+def like_photo(photo_id: str):
+    return _set_mark(Like, photo_id, True)
+
+
+@bp.delete("/photos/<photo_id>/like")
+@require_guest
+def unlike_photo(photo_id: str):
+    return _set_mark(Like, photo_id, False)
+
+
+@bp.put("/photos/<photo_id>/favorite")
+@require_guest
+def favorite_photo(photo_id: str):
+    return _set_mark(Favorite, photo_id, True)
+
+
+@bp.delete("/photos/<photo_id>/favorite")
+@require_guest
+def unfavorite_photo(photo_id: str):
+    return _set_mark(Favorite, photo_id, False)
 
 
 @bp.get("/stats")
 @require_guest
 def get_stats():
+    def count(query):
+        return db.session.scalar(query)
+
     return jsonify(
         {
-            "photoCount": db.session.scalar(db.select(func.count()).select_from(Photo)),
-            # 加入過相簿的賓客人數
-            "guestCount": db.session.scalar(db.select(func.count()).select_from(Guest)),
-            # TODO: 第五步（祝福）做好之後改成真的數字
-            "blessingCount": 0,
+            "photoCount": count(db.select(func.count()).select_from(Photo)),
+            # 透過 app 加入相簿的賓客人數，不含預先匯入的祝福作者
+            "guestCount": count(
+                db.select(func.count()).select_from(Guest).where(Guest.token_hash.is_not(None))
+            ),
+            "blessingCount": count(db.select(func.count()).select_from(Blessing)),
+            # 留言牆標題「32 位賓客留下了 47 則祝福」的 32：留過祝福的人數，含預先匯入的
+            "blessingGuestCount": count(db.select(func.count(func.distinct(Blessing.guest_id)))),
         }
     )

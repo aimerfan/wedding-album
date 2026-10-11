@@ -147,11 +147,13 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
   "guest": { "id": "g_2", "nickname": "阿凱" },
   "text": "祝你們白頭偕老！",
   "createdAt": "2026-10-17T19:30:00+08:00",
+  "editedAt": null,
   "photoId": "p_2"
 }
 ```
 
-`photoId` 為 `null` 代表是留言牆上的獨立祝福，沒有附照片。
+- `photoId` 為 `null` 代表是留言牆上的獨立祝福，沒有附照片。
+- `editedAt`：最後一次修改的時間，沒改過是 `null`。前端可以用它標示「已編輯」。
 
 ### WeddingPhoto
 
@@ -263,10 +265,11 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 `GET /api/stats`
 
 ```json
-{ "photoCount": 247, "guestCount": 32, "blessingCount": 47 }
+{ "photoCount": 247, "guestCount": 32, "blessingCount": 47, "blessingGuestCount": 30 }
 ```
 
-`guestCount` 是加入過相簿的賓客人數（不論有沒有上傳）。
+- `guestCount`：透過 app 加入相簿的賓客人數（不論有沒有上傳），不含預先匯入的祝福作者。
+- `blessingGuestCount`：留過祝福的人數，含預先匯入的。留言牆標題「30 位賓客留下了 47 則祝福」用這個。
 
 `GET /api/photos` 的篩選參數（都可以不帶）：
 
@@ -357,6 +360,8 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | --- | --- | --- |
 | `GET` | `/api/blessings` | 留言牆（分頁）；`guest=me` 只列自己的 |
 | `POST` | `/api/blessings` | 留下祝福 |
+| `PATCH` | `/api/blessings/{id}` | 修改自己的祝福，只能改 `text` |
+| `DELETE` | `/api/blessings/{id}` | 刪除自己的祝福，回 `204` |
 
 `POST /api/blessings`
 
@@ -367,7 +372,24 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 // 回應 201：建立好的 Blessing
 ```
 
-`text` 上限 200 字，前後空白會被去掉，去掉後是空字串回 `400`。
+- `text`：上限 200 字（`maxBlessingLength`），前後空白會被去掉。
+- `photoId`：只能是**自己上傳的照片**。照片上的祝福會顯示成「來自 OOO 的祝福」，不能掛到別人的照片上。
+
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `text_required` | `400` | 沒寫內容（只有空白也算） |
+| `text_too_long` | `400` | 超過字數 |
+| `photo_not_found` | `404` | `photoId` 指的照片不存在 |
+| `not_your_photo` | `403` | `photoId` 是別人的照片 |
+| `blessing_not_found` | `404` | 要改、刪的祝福不存在 |
+| `not_your_blessing` | `403` | 要改、刪的是別人的祝福 |
+
+修改時 `createdAt` 不變，所以留言牆上的順序不會因為改過而跳到最上面。
+內容跟原本一樣時不算修改，`editedAt` 維持原樣。
+
+**預先匯入的祝福**：婚禮前收到的祝福，可以用後端指令匯入（見 `backend/README.md`）。
+它們的作者不是透過 app 加入的賓客，之後同名的人用手機加入，會被當成另一位賓客，
+在自己的「我的祝福」裡看不到匯入的那則。
 
 ### 婚紗集
 

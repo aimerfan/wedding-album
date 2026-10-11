@@ -208,7 +208,12 @@ def test_stats(client, join, add_photo):
 
     res = client.get("/api/stats", headers=auth(token))
 
-    assert res.get_json() == {"photoCount": 2, "guestCount": 2, "blessingCount": 0}
+    assert res.get_json() == {
+        "photoCount": 2,
+        "guestCount": 2,
+        "blessingCount": 0,
+        "blessingGuestCount": 0,
+    }
 
 
 # --- 照片檔 ---------------------------------------------------------------
