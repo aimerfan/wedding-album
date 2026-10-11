@@ -189,6 +189,29 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 { "token": "…", "guest": { "id": "g_1", "nickname": "小慧", "relation": "新娘的大學同學" } }
 ```
 
+- `nickname`：必填，前後空白會被去掉，最多 20 字。
+- `relation`：選填，最多 30 字。空字串視同沒填。
+
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `invalid_event_code` | `401` | 活動碼沒帶或不正確 |
+| `nickname_required` | `400` | 暱稱是空的 |
+| `nickname_too_long` / `relation_too_long` | `400` | 超過字數 |
+
+其他需要 token 的 API，沒帶或帶錯 token 一律回 `401`、`code` 為 `unauthorized`。
+
+`PATCH /api/me`
+
+```json
+// 請求：只帶要改的欄位。relation 傳空字串代表清除
+{ "nickname": "小明" }
+
+// 回應 200
+{ "guest": { "id": "g_1", "nickname": "小明", "relation": "新娘的大學同學" } }
+```
+
+欄位限制同 `POST /api/guests`。
+
 `POST /api/me/transfer-codes`
 
 ```json

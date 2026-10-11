@@ -31,21 +31,38 @@ pip install -r requirements-dev.txt
 backend/
 ├── app/
 │   ├── __init__.py    # create_app()：組裝 Flask app
-│   ├── config.py      # 各種上限，都可用環境變數覆蓋
+│   ├── config.py      # 設定與各種上限，都可用環境變數覆蓋
 │   ├── errors.py      # 錯誤一律回 { "error": { code, message } }
+│   ├── db.py          # 資料庫連線
+│   ├── models.py      # 資料表
+│   ├── auth.py        # 發 token、驗 token（@require_guest）
 │   └── api/           # 一類功能一個模組，都掛在 /api 底下
 ├── tests/
 ├── requirements.txt       # 正式環境的套件
 └── requirements-dev.txt   # 開發用（pytest 等），會連同 requirements.txt 一起裝
 ```
 
+## 設定（環境變數）
+
+| 名稱 | 預設 | 說明 |
+| --- | --- | --- |
+| `EVENT_CODE` | 開發時為 `dev` | QR code 網址裡的活動碼。**正式環境沒設會拒絕啟動** |
+| `DATABASE_URL` | `sqlite:///wedding.db` | 相對路徑放在 `instance/` 底下 |
+
+各種上限（同時上傳數、檔案大小、截止上傳）也都能用環境變數調整，名稱見 `app/config.py`。
+
+## 資料庫
+
+- 開發用的資料庫在 `instance/wedding.db`，已被 git 忽略。
+- 啟動時會自動建立還不存在的資料表，但**不會修改已存在的資料表**。
+  改了 `app/models.py` 既有的欄位後，刪掉 `instance/wedding.db` 再啟動即可（開發資料會一起清掉）。
+- 正式上線前會加上 migration 工具，屆時改欄位就不必刪資料庫。
+
 ## 慣例
 
 - **新增套件**：寫進 `requirements.txt`（開發才用的寫進 `requirements-dev.txt`），用 `==` 釘死版本，
   上方加一行註解說明用途。不要用 `pip freeze` 整包倒進去，會分不清哪些是自己要的。
 - **改了程式就跑 `pytest`**。這個 repo 沒有 CI，測試是後端唯一的把關。
-- **調整上限**（同時上傳數、檔案大小、截止上傳）：改環境變數再重啟，不必改程式。
-  可用的名稱見 `app/config.py`，例如 `UPLOAD_CONCURRENCY=1`、`UPLOADS_OPEN=false`。
 
 ## 已定
 

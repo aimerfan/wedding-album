@@ -24,6 +24,10 @@ def _bool(name: str, default: bool) -> bool:
 def load() -> dict:
     """讀取設定。每次呼叫都重新讀環境變數，測試時才能個別調整。"""
     return {
+        # 相對路徑會放在 backend/instance/ 底下
+        "SQLALCHEMY_DATABASE_URI": os.environ.get("DATABASE_URL", "sqlite:///wedding.db"),
+        # QR code 網址裡的活動碼。正式環境一定要設；開發與測試時沒設就用 "dev"
+        "EVENT_CODE": os.environ.get("EVENT_CODE", ""),
         "MAX_PHOTO_BYTES": _int("MAX_PHOTO_BYTES", 30 * MB),
         "MAX_VIDEO_BYTES": _int("MAX_VIDEO_BYTES", 200 * MB),
         "MAX_UPLOADS_PER_HOUR": _int("MAX_UPLOADS_PER_HOUR", 300),

@@ -21,7 +21,8 @@ def test_config_can_be_changed_by_env(monkeypatch):
     monkeypatch.setenv("UPLOAD_CONCURRENCY", "1")
     monkeypatch.setenv("UPLOADS_OPEN", "false")
 
-    body = create_app().test_client().get("/api/config").get_json()
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    body = app.test_client().get("/api/config").get_json()
 
     assert body["uploadConcurrency"] == 1
     assert body["uploadsOpen"] is False
