@@ -77,7 +77,6 @@ export interface PickedMedia {
   file: File
   /** createObjectURL 產生的預覽網址，用完要 revoke */
   previewUrl: string
-  isVideo: boolean
 }
 
 /**

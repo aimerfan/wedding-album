@@ -21,21 +21,6 @@ const selectedIds = computed({
   set: (value: string[]) => (uploadFlow.selectedIds = value),
 })
 
-type Source = 'all' | 'photo' | 'video'
-const source = ref<Source>('all')
-
-const sources: { id: Source; label: string }[] = [
-  { id: 'all', label: '全部' },
-  { id: 'photo', label: '照片' },
-  { id: 'video', label: '影片' },
-]
-
-const visible = computed(() => {
-  if (source.value === 'photo') return picked.value.filter((p) => !p.isVideo)
-  if (source.value === 'video') return picked.value.filter((p) => p.isVideo)
-  return picked.value
-})
-
 const selectedCount = computed(() => selectedIds.value.length)
 
 const selectedPreviews = computed(() =>
@@ -50,13 +35,13 @@ function openPicker() {
 
 function onFilesChosen(event: Event) {
   const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
+  // 目前只收照片。有些系統選取器不理會 accept，選到影片也要濾掉
+  const files = Array.from(input.files ?? []).filter((f) => !f.type.startsWith('video/'))
   setPicked(
     files.map((file, i) => ({
       id: i + '-' + file.name + '-' + file.lastModified,
       file,
       previewUrl: URL.createObjectURL(file),
-      isVideo: file.type.startsWith('video/'),
     })),
   )
   // 預設全選，超過上限的部分不選
@@ -101,7 +86,7 @@ function next() {
     <input
       ref="fileInput"
       type="file"
-      accept="image/*,video/*"
+      accept="image/*,.heic,.heif"
       multiple
       hidden
       @change="onFilesChosen"
@@ -122,28 +107,18 @@ function next() {
           <path d="M21 16l-5-5L5 21" />
         </svg>
       </div>
-      <p class="empty-text">選一些今天拍的照片或影片<br />一起放進相簿裡</p>
+      <p class="empty-text">選一些今天拍的照片<br />一起放進相簿裡</p>
       <button class="empty-btn" type="button" @click="openPicker">從手機選擇</button>
     </div>
 
     <template v-else>
       <div class="sources">
-        <button
-          v-for="s in sources"
-          :key="s.id"
-          type="button"
-          class="source"
-          :class="{ active: source === s.id }"
-          @click="source = s.id"
-        >
-          {{ s.label }}
-        </button>
         <button class="source add" type="button" @click="openPicker">＋ 再選</button>
       </div>
 
       <div class="grid">
         <button
-          v-for="item in visible"
+          v-for="item in picked"
           :key="item.id"
           type="button"
           class="cell"
@@ -151,10 +126,6 @@ function next() {
         >
           <img :src="item.previewUrl" alt="" />
           <span class="mark" :class="{ on: orderOf(item.id) !== '' }">{{ orderOf(item.id) }}</span>
-          <span v-if="item.isVideo" class="video">
-            <svg viewBox="0 0 12 12" fill="#fff"><path d="M3 2v8l7-4z" /></svg>
-            影片
-          </span>
         </button>
       </div>
 
@@ -169,7 +140,7 @@ function next() {
           />
         </div>
         <span class="tray-text"
-          >已選 <b>{{ selectedCount }}</b> 個項目</span
+          >已選 <b>{{ selectedCount }}</b> 張照片</span
         >
         <button class="tray-btn" type="button" @click="next">下一步 →</button>
       </div>
@@ -358,24 +329,7 @@ function next() {
   background: var(--c-rose);
 }
 
-.video {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  font-size: 9px;
-  color: #fff;
-}
 
-.video svg {
-  width: 8px;
-  height: 8px;
-}
 
 .tray {
   position: fixed;

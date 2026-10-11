@@ -32,6 +32,20 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler
 }
 
+/**
+ * 把錯誤回應轉成 ApiError。帶了 token 卻被拒絕時，代表 token 已失效
+ * （例如開發時重建了資料庫），順便觸發重新加入。上傳（XHR）也共用這段。
+ */
+export function toApiError(status: number, data: unknown): ApiError {
+  const error = (data as { error?: { code?: string; message?: string } } | null)?.error
+  if (status === 401 && session.token) onUnauthorized()
+  return new ApiError(
+    status,
+    error?.code ?? 'unknown_error',
+    error?.message ?? '發生錯誤，請稍後再試',
+  )
+}
+
 function buildUrl(path: string, query?: Query) {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -59,17 +73,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   const data = await res.json().catch(() => null)
 
-  if (!res.ok) {
-    const error = data?.error
-    const apiError = new ApiError(
-      res.status,
-      error?.code ?? 'unknown_error',
-      error?.message ?? '發生錯誤，請稍後再試',
-    )
-    // 帶了 token 卻被拒絕：token 已失效（例如開發時重建了資料庫），要重新加入
-    if (res.status === 401 && session.token) onUnauthorized()
-    throw apiError
-  }
+  if (!res.ok) throw toApiError(res.status, data)
 
   return data as T
 }

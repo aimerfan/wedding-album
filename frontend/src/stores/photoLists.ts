@@ -117,3 +117,17 @@ export function filterToQuery(filter: PhotoFilter): Record<string, string> {
   for (const [k, v] of Object.entries(filter)) if (v) query[k] = v
   return query
 }
+
+/**
+ * 讓所有列表下次顯示時重新載入，例如剛上傳完照片。
+ * 只重設狀態、不換掉物件，畫面上正在用的列表會跟著更新。
+ */
+export function invalidateAll() {
+  for (const { state } of lists.values()) {
+    state.items = []
+    state.nextCursor = null
+    state.loaded = false
+    state.done = false
+    state.error = ''
+  }
+}

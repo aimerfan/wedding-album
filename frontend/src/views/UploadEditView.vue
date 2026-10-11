@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { ApiError } from '@/api/client'
+import { fetchConfig } from '@/api/config'
+import { uploadPhoto } from '@/api/upload'
 import { wedding } from '@/config/wedding'
-import { resetUploadFlow, session, uploadFlow } from '@/stores/session'
-import type { PhotoTag } from '@/types/album'
+import { invalidateAll } from '@/stores/photoLists'
+import { resetUploadFlow, session, uploadFlow, type PickedMedia } from '@/stores/session'
+import type { PhotoTag, UploadStatus } from '@/types/album'
 
 const router = useRouter()
 
@@ -17,7 +21,7 @@ const tagOptions: { id: PhotoTag; label: string }[] = [
 const selected = computed(() =>
   uploadFlow.selectedIds
     .map((id) => uploadFlow.picked.find((p) => p.id === id))
-    .filter((p) => Boolean(p)),
+    .filter((p): p is PickedMedia => Boolean(p)),
 )
 
 const count = computed(() => selected.value.length)
@@ -36,8 +40,93 @@ function addMore() {
   router.back()
 }
 
-function upload() {
-  // TODO: 接後端上傳 API，帶 uploadFlow.draft 一起送
+// --- 上傳 -----------------------------------------------------------------
+
+interface Task {
+  status: UploadStatus
+  /** 0–100 */
+  progress: number
+  errorMessage?: string
+}
+
+/** 每張照片的上傳狀態，key 是 PickedMedia.id */
+const tasks = reactive<Record<string, Task>>({})
+const running = ref(false)
+
+const failedCount = computed(
+  () => selected.value.filter((p) => tasks[p.id]?.status === 'failed').length,
+)
+const doneCount = computed(
+  () => selected.value.filter((p) => tasks[p.id]?.status === 'succeeded').length,
+)
+
+/** 失敗的原因通常都一樣（例如截止上傳、網路斷了），顯示第一個就好 */
+const failedMessage = computed(() => {
+  if (running.value || failedCount.value === 0) return ''
+  const first = selected.value.find((p) => tasks[p.id]?.status === 'failed')
+  const reason = first ? tasks[first.id]?.errorMessage : ''
+  return `有 ${failedCount.value} 張沒有傳成功：${reason}`
+})
+
+const submitLabel = computed(() => {
+  if (running.value) return `上 傳 中 ${doneCount.value} / ${count.value}`
+  if (failedCount.value > 0) return `重 試 ${failedCount.value} 張`
+  return `上 傳 ${count.value} 張 照 片`
+})
+
+// 後端拿不到設定時的保底值，跟後端預設一致
+const FALLBACK = { uploadConcurrency: 3, maxPhotoBytes: 30 * 1024 * 1024 }
+
+async function upload() {
+  if (running.value) return
+  running.value = true
+
+  const config = await fetchConfig().catch(() => FALLBACK)
+  const tag = uploadFlow.draft.tag
+  // 已經傳成功的不重傳；按「重試」時只會跑失敗的那幾張
+  const queue = selected.value.filter((p) => tasks[p.id]?.status !== 'succeeded')
+  for (const item of queue) tasks[item.id] = { status: 'pending', progress: 0 }
+
+  // 碰到「截止上傳」「傳太多」這種後面每張都會失敗的錯誤，就不再送了
+  let stopReason = ''
+
+  async function worker() {
+    for (let item = queue.shift(); item; item = queue.shift()) {
+      const task = tasks[item.id]!
+      if (stopReason) {
+        Object.assign(task, { status: 'failed', errorMessage: stopReason })
+        continue
+      }
+      // 先在手機上擋掉太大的檔案，不必浪費流量傳到一半才被拒絕
+      if (item.file.size > config.maxPhotoBytes) {
+        const mb = Math.floor(config.maxPhotoBytes / 1024 / 1024)
+        Object.assign(task, { status: 'failed', errorMessage: `照片太大了，單張上限 ${mb} MB` })
+        continue
+      }
+
+      task.status = 'uploading'
+      try {
+        await uploadPhoto(item.file, tag, (percent) => (task.progress = percent))
+        Object.assign(task, { status: 'succeeded', progress: 100 })
+      } catch (e) {
+        const message = e instanceof ApiError ? e.message : '上傳失敗，請稍後再試'
+        Object.assign(task, { status: 'failed', errorMessage: message })
+        if (e instanceof ApiError && [401, 403, 429].includes(e.status)) stopReason = message
+      }
+    }
+  }
+
+  // 同時傳幾張由後端設定決定，不要一次全送：會互搶網路，每張都變慢
+  const workers = Array.from({ length: Math.max(1, config.uploadConcurrency) }, worker)
+  await Promise.all(workers)
+  running.value = false
+
+  if (doneCount.value > 0) invalidateAll()
+  if (failedCount.value === 0) finish()
+}
+
+function finish() {
+  // TODO: 第五步（祝福）做好之後，在這裡用第一張成功的 id 呼叫 POST /api/blessings 送出祝福
   resetUploadFlow()
   router.push({ name: 'feed' })
 }
@@ -46,6 +135,12 @@ function skip() {
   uploadFlow.draft.blessing = ''
   upload()
 }
+
+// 傳到一半離開會中斷上傳，先確認
+onBeforeRouteLeave(() => {
+  if (!running.value) return true
+  return window.confirm('照片還在上傳中，離開會中斷上傳。確定要離開嗎？')
+})
 </script>
 
 <template>
@@ -64,18 +159,41 @@ function skip() {
         返回
       </button>
       <h1>留下祝福</h1>
-      <button class="skip" type="button" @click="skip">跳過</button>
+      <button class="skip" type="button" :disabled="running" @click="skip">跳過</button>
     </header>
 
     <section class="preview">
-      <p class="preview-label">{{ count }} 個項目 · 將公開分享</p>
+      <p class="preview-label">{{ count }} 張照片 · 將公開分享</p>
       <div class="preview-row">
-        <div v-for="item in selected" :key="item!.id" class="thumb">
-          <img :src="item!.previewUrl" alt="" />
-          <span v-if="item!.isVideo" class="thumb-video">影片</span>
+        <div v-for="item in selected" :key="item.id" class="thumb">
+          <img :src="item.previewUrl" alt="" />
+          <template v-if="tasks[item.id]">
+            <span
+              v-if="tasks[item.id]!.status === 'uploading' || tasks[item.id]!.status === 'pending'"
+              class="thumb-progress"
+              :style="{ width: tasks[item.id]!.progress + '%' }"
+            />
+            <span v-else-if="tasks[item.id]!.status === 'succeeded'" class="thumb-badge ok">✓</span>
+            <span v-else class="thumb-badge fail" :title="tasks[item.id]!.errorMessage">!</span>
+          </template>
         </div>
-        <button class="thumb add" type="button" aria-label="再選照片" @click="addMore">＋</button>
+        <button
+          v-if="!running"
+          class="thumb add"
+          type="button"
+          aria-label="再選照片"
+          @click="addMore"
+        >
+          ＋
+        </button>
       </div>
+      <p v-if="failedMessage" class="upload-error" role="alert">
+        {{ failedMessage }}
+        <!-- 壞掉的檔案怎麼重試都不會成功，給一條出路 -->
+        <button v-if="doneCount > 0" class="give-up" type="button" @click="finish">
+          略過失敗的，回相簿
+        </button>
+      </p>
     </section>
 
     <section class="block">
@@ -135,8 +253,8 @@ function skip() {
     </section>
 
     <div class="submit-bar">
-      <button class="submit" type="button" :disabled="count === 0" @click="upload">
-        上 傳 {{ count }} 個 項 目
+      <button class="submit" type="button" :disabled="count === 0 || running" @click="upload">
+        {{ submitLabel }}
       </button>
     </div>
   </main>
@@ -226,15 +344,52 @@ function skip() {
   object-fit: cover;
 }
 
-.thumb-video {
+/* 上傳進度：沿著縮圖底部長出來的一條線 */
+.thumb-progress {
   position: absolute;
-  bottom: 4px;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--c-rose);
+  transition: width 0.2s;
+}
+
+.thumb-badge {
+  position: absolute;
+  top: 4px;
   right: 4px;
-  padding: 1px 4px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.5);
-  font-size: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
   color: #fff;
+}
+
+.thumb-badge.ok {
+  background: var(--c-rose);
+}
+
+.thumb-badge.fail {
+  background: var(--c-ink);
+}
+
+.upload-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--c-rose);
+}
+
+.give-up {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-ink-soft);
+  text-decoration: underline;
 }
 
 .thumb.add {

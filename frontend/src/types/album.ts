@@ -23,9 +23,11 @@ export type PhotoTag = 'welcome' | 'ceremony' | 'banquet'
 export interface Photo {
   id: PhotoId
   kind: MediaKind
-  /** 原圖網址。後端組好的，直接放進 <img src>，不要自己組 */
+  /** 原檔網址，可能是 HEIC。只用在下載與匯出，不要拿來顯示 */
   url: string
-  /** 縮圖網址。列表一律用這個，不要載原圖 */
+  /** 長邊 1600px 的 JPEG。照片詳情等放大檢視用這個 */
+  displayUrl: string
+  /** 長邊 480px 的 JPEG。列表一律用這個 */
   thumbnailUrl: string
   width: number
   height: number

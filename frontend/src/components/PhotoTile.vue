@@ -13,7 +13,7 @@ const props = withDefaults(
     /** CSS aspect-ratio，例如 '4/5'；'auto' 表示由外層控制高度 */
     ratio?: string
     label?: string
-    /** 載原圖而不是縮圖。只有放大檢視（照片詳情、婚紗集）才用 */
+    /** 載顯示用的大圖而不是縮圖。只有放大檢視（照片詳情、婚紗集）才用 */
     full?: boolean
   }>(),
   { ratio: '4/5', index: 0 },
@@ -33,7 +33,7 @@ const GRADIENTS: [string, string][] = [
   ['#D6BCA9', '#9D7B62'],
 ]
 
-const src = computed(() => (props.full ? props.photo?.url : props.photo?.thumbnailUrl) || '')
+const src = computed(() => (props.full ? props.photo?.displayUrl : props.photo?.thumbnailUrl) || '')
 
 const gradient = computed(() => {
   const [a, b] = GRADIENTS[(props.index ?? 0) % GRADIENTS.length]
