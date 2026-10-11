@@ -58,12 +58,16 @@ const router = createRouter({
 })
 
 /**
- * 還沒留下暱稱的賓客一律先進歡迎頁。
- * 這不是驗證，只是要有個稱呼掛在照片和祝福上。
+ * 還沒加入相簿（沒有 token）的賓客一律先進歡迎頁。
+ * 加入之後原本要去的網址記在 redirect，加入完再帶過去（例如分享出去的照片連結）。
  */
 router.beforeEach((to) => {
   if (to.name === 'welcome') return true
-  if (!session.nickname) return { name: 'welcome' }
+  if (!session.token) {
+    return to.fullPath === '/'
+      ? { name: 'welcome' }
+      : { name: 'welcome', query: { redirect: to.fullPath } }
+  }
   return true
 })
 

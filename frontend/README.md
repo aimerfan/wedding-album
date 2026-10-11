@@ -26,6 +26,8 @@ npm run dev
 - `@/` 指向 `src/`。
 - 呼叫 API 一律寫相對路徑 `/api/...`。開發時 Vite 會轉給 `localhost:5000` 的 Flask，
   要用到 API 的畫面得先把後端跑起來（見 `backend/README.md`）。
+- 所有 API 呼叫都經過 `src/api/client.ts`，它負責帶 token、把錯誤統一成 `ApiError`。
+- 活動碼從會場 QR code 的網址 `?code=...` 讀取並記在手機上；開發時沒有 QR code，自動用後端的開發值 `dev`。
 - 色票與版面尺寸的唯一來源是 `src/assets/tokens.css`，不要在元件裡寫死顏色。
   `docs/design/extracted/` 裡的 `A` 物件是設計稿的凍結快照，不是現行來源。
 - `src/mock/` 是為了讓畫面長出來的假資料，目前各支 view 直接 import 它。

@@ -8,6 +8,8 @@ import type { UploadDraft } from '@/types/album'
 
 const NICKNAME_KEY = 'wedding-album:nickname'
 const RELATION_KEY = 'wedding-album:relation'
+const TOKEN_KEY = 'wedding-album:token'
+const EVENT_CODE_KEY = 'wedding-album:event-code'
 
 function read(key: string): string {
   try {
@@ -23,22 +25,50 @@ function write(key: string, value: string) {
     if (value) localStorage.setItem(key, value)
     else localStorage.removeItem(key)
   } catch {
-    // 存不進去也無所謂，只是下次要重打
+    // 存不進去也無所謂，只是下次要重新加入
   }
 }
 
+/**
+ * 活動碼來自會場 QR code 的網址（?code=...），第一次打開時記下來，之後加入相簿要用。
+ * 開發時沒有 QR code，用後端開發模式的預設值 "dev"。
+ */
+function initialEventCode(): string {
+  const fromUrl = new URLSearchParams(window.location.search).get('code')
+  if (fromUrl) {
+    write(EVENT_CODE_KEY, fromUrl)
+    return fromUrl
+  }
+  return read(EVENT_CODE_KEY) || (import.meta.env.DEV ? 'dev' : '')
+}
+
 export const session = reactive({
+  /** 後端發的身分代號。有它才算加入了相簿，見 docs/api.md 的「身分」 */
+  token: read(TOKEN_KEY),
+  eventCode: initialEventCode(),
   /** 賓客自己輸入的暱稱，這個 app 沒有帳號密碼 */
   nickname: read(NICKNAME_KEY),
   /** 與新人的關係，選填，例如「新娘的大學同學」 */
   relation: read(RELATION_KEY),
 })
 
+/** 暱稱與關係以後端回傳的為準，這裡只是存一份在手機上，畫面不必每次都問後端 */
 export function setProfile(nickname: string, relation: string) {
   session.nickname = nickname
   session.relation = relation
   write(NICKNAME_KEY, nickname)
   write(RELATION_KEY, relation)
+}
+
+export function setToken(token: string) {
+  session.token = token
+  write(TOKEN_KEY, token)
+}
+
+/** token 失效時清掉。暱稱留著，重新加入時歡迎頁可以直接帶入 */
+export function clearToken() {
+  session.token = ''
+  write(TOKEN_KEY, '')
 }
 
 /** 使用者從系統選取器挑到的檔案 */

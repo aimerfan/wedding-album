@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ApiError } from '@/api/client'
+import { updateMe } from '@/api/guests'
 import { session, setProfile } from '@/stores/session'
 
 /** 「我的」頁改暱稱與「與新人的關係」 */
@@ -7,21 +9,32 @@ const open = defineModel<boolean>({ required: true })
 
 const nickname = ref('')
 const relation = ref('')
+const saving = ref(false)
+const error = ref('')
 
-const canSave = computed(() => nickname.value.trim().length > 0)
+const canSave = computed(() => nickname.value.trim().length > 0 && !saving.value)
 
 // 每次打開都從目前的資料重新帶入，上次取消時改到一半的內容不留著
 watch(open, (isOpen) => {
   if (!isOpen) return
   nickname.value = session.nickname
   relation.value = session.relation
+  error.value = ''
 })
 
-function save() {
+async function save() {
   if (!canSave.value) return
-  // TODO: 接後端 API（PATCH /api/me）。現在只存在這支手機上
-  setProfile(nickname.value.trim(), relation.value.trim())
-  open.value = false
+  saving.value = true
+  error.value = ''
+  try {
+    const { guest } = await updateMe(nickname.value.trim(), relation.value.trim())
+    setProfile(guest.nickname, guest.relation ?? '')
+    open.value = false
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : '儲存失敗，請稍後再試'
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 
@@ -62,7 +75,11 @@ function save() {
 
         <p class="note">改名後，你之前上傳的照片和祝福也會顯示新的名字。</p>
 
-        <button class="save" type="submit" :disabled="!canSave">儲 存</button>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+        <button class="save" type="submit" :disabled="!canSave">
+          {{ saving ? '儲 存 中 …' : '儲 存' }}
+        </button>
       </form>
     </div>
   </Transition>
@@ -172,6 +189,12 @@ function save() {
   margin: 0;
   font-size: 11px;
   color: var(--c-ink-mute);
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-rose);
 }
 
 .save {

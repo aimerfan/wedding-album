@@ -1,22 +1,52 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ApiError } from '@/api/client'
+import { joinAlbum, updateMe } from '@/api/guests'
 import PhotoTile from '@/components/PhotoTile.vue'
 import DecoDivider from '@/components/DecoDivider.vue'
 import { wedding } from '@/config/wedding'
-import { session, setProfile } from '@/stores/session'
+import { session, setProfile, setToken } from '@/stores/session'
 
+const route = useRoute()
 const router = useRouter()
 
-// 從上傳頁按「更改」回來時，帶入原本填的內容
+// 從上傳頁按「更改」回來、或 token 失效重新加入時，帶入原本填的內容
 const name = ref(session.nickname)
 const relation = ref(session.relation)
 
-function enter() {
-  const trimmed = name.value.trim()
-  if (!trimmed) return
-  setProfile(trimmed, relation.value.trim())
-  router.push({ name: 'feed' })
+const submitting = ref(false)
+const error = ref('')
+
+async function enter() {
+  const nickname = name.value.trim()
+  if (!nickname || submitting.value) return
+
+  if (!session.token && !session.eventCode) {
+    error.value = '請用手機掃描婚禮會場的 QR code 進入'
+    return
+  }
+
+  submitting.value = true
+  error.value = ''
+  try {
+    // 已經加入過（從上傳頁按「更改」回來）就只改資料，不要變成另一位新賓客
+    const { guest } = session.token
+      ? await updateMe(nickname, relation.value.trim())
+      : await joinAlbum(session.eventCode, nickname, relation.value.trim()).then((r) => {
+          setToken(r.token)
+          return r
+        })
+    setProfile(guest.nickname, guest.relation ?? '')
+
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    // 只接受站內路徑，避免被帶去別的網站
+    router.replace(redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : { name: 'feed' })
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : '發生錯誤，請稍後再試'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -70,8 +100,10 @@ function enter() {
         />
       </label>
 
-      <button class="enter" type="button" :disabled="!name.trim()" @click="enter">
-        進 入 相 簿
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+      <button class="enter" type="button" :disabled="!name.trim() || submitting" @click="enter">
+        {{ submitting ? '進 入 中 …' : '進 入 相 簿' }}
       </button>
 
       <p class="consent">進入後即代表同意分享你拍攝的回憶</p>
@@ -226,5 +258,12 @@ function enter() {
   font-size: 11px;
   letter-spacing: 1px;
   color: var(--c-ink-mute);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--c-rose);
 }
 </style>
