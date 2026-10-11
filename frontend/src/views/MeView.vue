@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import ContinueSheet from '@/components/ContinueSheet.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
+import ProfileSheet from '@/components/ProfileSheet.vue'
 import { currentGuest, myPhotos, myStats } from '@/mock/sample'
 import { session } from '@/stores/session'
 
@@ -19,6 +20,7 @@ const tabs = [
 const activeTab = ref<(typeof tabs)[number]['id']>('uploaded')
 
 const continueOpen = ref(false)
+const profileOpen = ref(false)
 </script>
 
 <template>
@@ -35,10 +37,26 @@ const continueOpen = ref(false)
     </button>
 
     <ContinueSheet v-model="continueOpen" />
+    <ProfileSheet v-model="profileOpen" />
 
     <header class="profile">
       <span class="avatar">{{ initial }}</span>
-      <h1 class="name">{{ nickname }}</h1>
+      <div class="name-row">
+        <h1 class="name">{{ nickname }}</h1>
+        <button class="edit" type="button" aria-label="編輯個人資料" @click="profileOpen = true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </button>
+      </div>
       <p v-if="session.relation" class="relation">{{ session.relation }}</p>
 
       <div class="stats">
@@ -145,8 +163,40 @@ const continueOpen = ref(false)
   font-size: 32px;
 }
 
+/* 筆的按鈕放名字右邊，名字本身仍置中：左邊用等寬的空白抵銷 */
+.name-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.name-row::before {
+  content: '';
+  width: 28px;
+}
+
+.edit {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--c-ink-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit svg {
+  width: 14px;
+  height: 14px;
+}
+
 .name {
-  margin: 12px 0 0;
+  margin: 0;
   font-family: var(--f-serif);
   font-size: 20px;
   font-weight: 500;
