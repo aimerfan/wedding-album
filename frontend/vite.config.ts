@@ -77,4 +77,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // 開發時把 /api 轉給本機的 Flask（backend/），前端程式一律寫相對路徑 /api/...，不必處理 CORS
+    proxy: { '/api': 'http://localhost:5000' },
+  },
 })
