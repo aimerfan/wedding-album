@@ -1,20 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { deleteBlessing } from '@/api/blessings'
+import { ApiError } from '@/api/client'
 import { fetchMe, type MyStats } from '@/api/guests'
+import type { PhotoFilter } from '@/api/photos'
+import BlessingComposer from '@/components/BlessingComposer.vue'
+import BlessingNote from '@/components/BlessingNote.vue'
 import ContinueSheet from '@/components/ContinueSheet.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import ProfileSheet from '@/components/ProfileSheet.vue'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
-import { ensureLoaded, getPhotoList, loadMore } from '@/stores/photoLists'
-import { session, setProfile } from '@/stores/session'
+import {
+  ensureBlessingsLoaded,
+  getBlessingList,
+  loadMoreBlessings,
+  removeBlessing,
+} from '@/stores/blessingLists'
+import { ensureLoaded, filterToQuery, getPhotoList, loadMore } from '@/stores/photoLists'
+import { session, setGuestId, setProfile } from '@/stores/session'
+import type { Blessing } from '@/types/album'
 
 const nickname = computed(() => session.nickname || '賓客')
 const initial = computed(() => nickname.value[0] ?? '賓')
-
-/** 「我上傳的」= GET /api/photos?uploader=me；點進照片詳情時帶同樣的條件，左右滑只在自己的照片之間 */
-const MINE = { uploader: 'me' }
-const uploaded = getPhotoList(MINE)
 
 const stats = ref<MyStats>({ uploaded: 0, favorited: 0, likesReceived: 0, blessings: 0 })
 
@@ -25,30 +33,84 @@ const tabs = [
   { id: 'blessings', label: '我的祝福', stat: 'blessings' },
 ] as const
 
-const activeTab = ref<(typeof tabs)[number]['id']>('uploaded')
+type TabId = (typeof tabs)[number]['id']
+const activeTab = ref<TabId>('uploaded')
 
-const continueOpen = ref(false)
-const profileOpen = ref(false)
+/**
+ * 兩個照片分頁各自是一串照片列表。點進照片詳情時帶同樣的條件（例如 ?favorited=true），
+ * 左右滑就只在這一串裡換。
+ */
+const PHOTO_FILTERS: Partial<Record<TabId, PhotoFilter>> = {
+  uploaded: { uploader: 'me' },
+  favorites: { favorited: 'true' },
+}
+const photoFilter = computed(() => PHOTO_FILTERS[activeTab.value])
+const photos = computed(() => (photoFilter.value ? getPhotoList(photoFilter.value) : null))
+
+/** 「我的祝福」：GET /api/blessings?guest=me */
+const MY_BLESSINGS = { guest: 'me' as const }
+const myBlessings = getBlessingList(MY_BLESSINGS)
+
+watch(
+  activeTab,
+  () => {
+    if (photoFilter.value) ensureLoaded(photoFilter.value)
+    else ensureBlessingsLoaded(MY_BLESSINGS)
+  },
+  { immediate: true },
+)
 
 const sentinel = ref<HTMLElement>()
 useInfiniteScroll(sentinel, async () => {
-  if (uploaded.loading) return false
-  await loadMore(MINE)
-  return !uploaded.done && !uploaded.error
+  if (photoFilter.value) {
+    const list = photos.value!
+    if (list.loading) return false
+    await loadMore(photoFilter.value)
+    return !list.done && !list.error
+  }
+  if (myBlessings.loading) return false
+  await loadMoreBlessings(MY_BLESSINGS)
+  return !myBlessings.done && !myBlessings.error
 })
 
-onMounted(() => {
-  ensureLoaded(MINE)
+function refreshMe() {
   fetchMe()
     .then((me) => {
       stats.value = me.stats
       // 以後端為準，例如在別的裝置改過名字
       setProfile(me.guest.nickname, me.guest.relation ?? '')
+      setGuestId(me.guest.id)
     })
     .catch(() => {
       // 統計數字拿不到就先顯示 0，不擋住整頁
     })
-})
+}
+
+onMounted(refreshMe)
+
+// --- 修改、刪除自己的祝福 -------------------------------------------------
+
+const composing = ref(false)
+const editing = ref<Blessing | null>(null)
+
+function edit(blessing: Blessing) {
+  editing.value = blessing
+  composing.value = true
+}
+
+async function remove(blessing: Blessing) {
+  if (!window.confirm('確定要刪除這則祝福嗎？刪除後無法復原。')) return
+  try {
+    await deleteBlessing(blessing.id)
+    removeBlessing(blessing.id)
+    refreshMe()
+  } catch (e) {
+    window.alert(e instanceof ApiError ? e.message : '刪除失敗，請稍後再試')
+  }
+}
+
+const continueOpen = ref(false)
+const profileOpen = ref(false)
 </script>
 
 <template>
@@ -118,26 +180,44 @@ onMounted(() => {
       </button>
     </nav>
 
-    <template v-if="activeTab === 'uploaded'">
+    <template v-if="photos && photoFilter">
       <div class="grid">
         <RouterLink
-          v-for="(p, i) in uploaded.items"
+          v-for="(p, i) in photos.items"
           :key="p.id"
           class="cell"
-          :to="{ name: 'photo-detail', params: { photoId: p.id }, query: MINE }"
+          :to="{ name: 'photo-detail', params: { photoId: p.id }, query: filterToQuery(photoFilter) }"
         >
           <PhotoTile :photo="p" :index="i * 3" ratio="1/1" />
         </RouterLink>
       </div>
-      <p v-if="uploaded.error" class="empty">{{ uploaded.error }}</p>
-      <p v-else-if="uploaded.loaded && uploaded.items.length === 0" class="empty">
-        你還沒有上傳照片
+      <p v-if="photos.error" class="empty">{{ photos.error }}</p>
+      <p v-else-if="photos.loaded && photos.items.length === 0" class="empty">
+        {{ activeTab === 'uploaded' ? '你還沒有上傳照片' : '還沒有收藏，在照片右下角點書籤就能收藏' }}
       </p>
-      <div ref="sentinel" />
     </template>
 
-    <!-- TODO: 第五步（收藏、祝福）的 API 做好之後接上 -->
-    <p v-else class="empty">即將推出</p>
+    <template v-else>
+      <ul class="notes">
+        <BlessingNote
+          v-for="(b, i) in myBlessings.items"
+          :key="b.id"
+          :blessing="b"
+          :tilt="i % 2 === 0 ? 'left' : 'right'"
+          @edit="edit"
+          @delete="remove"
+        />
+      </ul>
+      <p v-if="myBlessings.error" class="empty">{{ myBlessings.error }}</p>
+      <p v-else-if="myBlessings.loaded && myBlessings.items.length === 0" class="empty">
+        你還沒有留下祝福
+      </p>
+    </template>
+
+    <!-- 捲到這裡附近就載入下一頁 -->
+    <div ref="sentinel" class="sentinel" />
+
+    <BlessingComposer v-model="composing" :editing="editing" @saved="refreshMe" />
   </main>
 </template>
 
@@ -331,6 +411,19 @@ onMounted(() => {
   text-align: center;
   font-size: 13px;
   color: var(--c-ink-mute);
+}
+
+.notes {
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sentinel {
+  height: 80px;
 }
 
 .cell {
