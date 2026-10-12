@@ -159,9 +159,9 @@ def claim_transfer_code():
 
     transfer = db.session.get(TransferCode, code) if code else None
     if transfer is None or transfer.used_at is not None:
-        raise ApiError(401, "invalid_transfer_code", "這個連結已經用過或無效，請在原本的裝置重新產生")
+        raise ApiError(401, "invalid_transfer_code", "這個接續碼已經用過或無效，請在原本的裝置重新產生")
     if transfer.expires_at <= now():
-        raise ApiError(401, "transfer_code_expired", "這個連結已經過期，請在原本的裝置重新產生")
+        raise ApiError(401, "transfer_code_expired", "這個接續碼已經過期，請在原本的裝置重新產生")
 
     transfer.used_at = now()
     guest = db.session.get(Guest, transfer.guest_id)
