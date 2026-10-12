@@ -31,6 +31,7 @@ watch(open, (isOpen) => {
 async function generate() {
   link.value = ''
   copied.value = false
+  copyFailed.value = false
   error.value = ''
   loading.value = true
   try {
@@ -45,14 +46,45 @@ async function generate() {
   }
 }
 
-async function copy() {
+/** 複製失敗時提示手動複製（連結那一格點一下就會整串選起來） */
+const copyFailed = ref(false)
+
+/**
+ * 舊式的複製方法：放一個看不見的輸入框、選取、execCommand('copy')。
+ * 不是 HTTPS（例如開發時用區網 IP 連）或瀏覽器太舊時，navigator.clipboard 不存在，靠這個備案。
+ */
+function legacyCopy(text: string): boolean {
+  const el = document.createElement('textarea')
+  el.value = text
+  el.setAttribute('readonly', '')
+  el.style.position = 'fixed'
+  el.style.opacity = '0'
+  document.body.appendChild(el)
+  el.select()
+  el.setSelectionRange(0, text.length) // iOS 只認這個
+  let ok = false
   try {
-    await navigator.clipboard.writeText(link.value)
-    copied.value = true
+    ok = document.execCommand('copy')
   } catch {
-    // 沒有剪貼簿權限時，至少讓使用者能手動選取
-    copied.value = false
+    ok = false
   }
+  document.body.removeChild(el)
+  return ok
+}
+
+async function copy() {
+  copyFailed.value = false
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(link.value)
+      copied.value = true
+      return
+    }
+  } catch {
+    // 有 clipboard 但被拒絕（權限、瀏覽器限制），改用舊方法
+  }
+  copied.value = legacyCopy(link.value)
+  copyFailed.value = !copied.value
 }
 
 async function share() {
@@ -84,6 +116,7 @@ async function share() {
           <!-- user-select: all，點一下就整串選起來，沒有剪貼簿權限時也能手動複製 -->
           <p class="link">{{ link }}</p>
           <p class="note">{{ expiresLabel }} 前有效，只能使用一次。請不要傳給別人。</p>
+          <p v-if="copyFailed" class="note warn">這支手機不能自動複製，請長按上面的連結手動複製</p>
         </template>
 
         <div class="actions">
@@ -190,6 +223,10 @@ h2 {
 .secondary:disabled {
   opacity: 0.45;
   box-shadow: none;
+}
+
+.note.warn {
+  color: var(--c-rose);
 }
 
 .note {

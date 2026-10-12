@@ -36,6 +36,8 @@ const router = createRouter({
     { path: '/welcome', name: 'welcome', component: () => import('@/views/WelcomeView.vue') },
     // 接續連結：在另一個裝置延續同一位賓客，不需要先加入相簿
     { path: '/continue', name: 'continue', component: () => import('@/views/ContinueView.vue') },
+    // 開通管理員：要先加入相簿（沒加入會先導去歡迎頁，加入後帶回來）
+    { path: '/admin', name: 'admin', component: () => import('@/views/AdminView.vue') },
     { path: '/upload', name: 'upload', component: () => import('@/views/UploadPickerView.vue') },
     {
       path: '/upload/edit',

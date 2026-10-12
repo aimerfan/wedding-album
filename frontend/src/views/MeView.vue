@@ -18,7 +18,7 @@ import {
   removeBlessing,
 } from '@/stores/blessingLists'
 import { ensureLoaded, filterToQuery, getPhotoList, loadMore } from '@/stores/photoLists'
-import { session, setGuestId, setProfile } from '@/stores/session'
+import { session, setAdmin, setGuestId, setProfile } from '@/stores/session'
 import type { Blessing } from '@/types/album'
 
 const nickname = computed(() => session.nickname || '賓客')
@@ -80,6 +80,7 @@ function refreshMe() {
       // 以後端為準，例如在別的裝置改過名字
       setProfile(me.guest.nickname, me.guest.relation ?? '')
       setGuestId(me.guest.id)
+      setAdmin(me.isAdmin)
     })
     .catch(() => {
       // 統計數字拿不到就先顯示 0，不擋住整頁
@@ -99,7 +100,11 @@ function edit(blessing: Blessing) {
 }
 
 async function remove(blessing: Blessing) {
-  if (!window.confirm('確定要刪除這則祝福嗎？刪除後無法復原。')) return
+  const question =
+    blessing.guest.id === session.guestId
+      ? '確定要刪除這則祝福嗎？刪除後無法復原。'
+      : `以管理員身分刪除「${blessing.guest.nickname}」的祝福？刪除後無法復原。`
+  if (!window.confirm(question)) return
   try {
     await deleteBlessing(blessing.id)
     removeBlessing(blessing.id)

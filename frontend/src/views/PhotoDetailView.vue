@@ -2,9 +2,17 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
-import { fetchPhoto, setFavorited, setLiked } from '@/api/photos'
+import { deletePhoto, fetchPhoto, setFavorited, setLiked } from '@/api/photos'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
-import { ensureLoaded, filterFromQuery, getPhotoList, loadMore, updatePhoto } from '@/stores/photoLists'
+import {
+  ensureLoaded,
+  filterFromQuery,
+  getPhotoList,
+  loadMore,
+  removePhoto,
+  updatePhoto,
+} from '@/stores/photoLists'
+import { session } from '@/stores/session'
 import type { Photo } from '@/types/album'
 
 const props = defineProps<{ photoId: string }>()
@@ -135,6 +143,48 @@ function toggleLike() {
   )
 }
 
+// --- 刪除照片 -------------------------------------------------------------
+
+const isMine = computed(() => !!photo.value && photo.value.uploader.id === session.guestId)
+/** 上傳者刪自己的；管理員可刪任何一張。真正的權限由後端把關，這裡只決定要不要顯示選單 */
+const canDelete = computed(() => isMine.value || session.isAdmin)
+const moreOpen = ref(false)
+const deleting = ref(false)
+
+// 換張時把選單收起來
+watch(() => props.photoId, () => (moreOpen.value = false))
+
+async function removeCurrent() {
+  const target = photo.value
+  if (!target || deleting.value) return
+  const question = isMine.value
+    ? '確定要刪除這張照片嗎？刪除後無法復原。'
+    : `以管理員身分刪除「${target.uploader.nickname}」上傳的這張照片？刪除後無法復原。`
+  if (!window.confirm(question)) return
+
+  deleting.value = true
+  // 刪完要顯示同一串裡的下一張（沒有下一張就上一張）；這串只剩它的話就關掉
+  const list = photos.value
+  const i = list.findIndex((p) => p.id === target.id)
+  const neighbor = list[i + 1] ?? list[i - 1]
+  try {
+    await deletePhoto(target.id)
+    removePhoto(target.id)
+    if (single.value?.id === target.id) single.value = null
+    moreOpen.value = false
+    if (neighbor) {
+      router.replace({ name: 'photo-detail', params: { photoId: neighbor.id }, query: route.query })
+    } else {
+      close()
+    }
+  } catch (e) {
+    actionError.value = e instanceof ApiError ? e.message : '刪除失敗，請稍後再試'
+    moreOpen.value = false
+  } finally {
+    deleting.value = false
+  }
+}
+
 function toggleFavorite() {
   toggle(
     (p) => ({ ...p, favoritedByMe: !p.favoritedByMe }),
@@ -152,19 +202,34 @@ function toggleFavorite() {
         </svg>
       </button>
       <span class="counter">{{ counter }}</span>
-      <button class="round" type="button" aria-label="更多">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#fff"
-          stroke-width="1.8"
-          stroke-linecap="round"
+      <!-- 只有上傳者與管理員有選單；其他人留一塊空白，讓序號保持置中 -->
+      <div v-if="canDelete" class="more">
+        <button
+          class="round"
+          type="button"
+          aria-label="更多"
+          :aria-expanded="moreOpen"
+          @click="moreOpen = !moreOpen"
         >
-          <circle cx="5" cy="12" r="2" />
-          <circle cx="12" cy="12" r="2" />
-          <circle cx="19" cy="12" r="2" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          >
+            <circle cx="5" cy="12" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="19" cy="12" r="2" />
+          </svg>
+        </button>
+        <div v-if="moreOpen" class="more-pop" role="menu">
+          <button type="button" role="menuitem" :disabled="deleting" @click="removeCurrent">
+            {{ deleting ? '刪除中…' : isMine ? '刪除照片' : '刪除照片（管理員）' }}
+          </button>
+        </div>
+      </div>
+      <span v-else class="round-spacer" />
     </header>
 
     <div class="stage">
@@ -297,6 +362,35 @@ function toggleFavorite() {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.round-spacer {
+  width: 32px;
+}
+
+.more {
+  position: relative;
+}
+
+.more-pop {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  min-width: 160px;
+  padding: 4px 0;
+  border-radius: 10px;
+  background: var(--c-card);
+  box-shadow: var(--shadow-float);
+}
+
+.more-pop button {
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  color: var(--c-rose);
 }
 
 .round svg {

@@ -16,6 +16,7 @@ import {
   reloadBlessings,
   removeBlessing,
 } from '@/stores/blessingLists'
+import { session } from '@/stores/session'
 import type { AlbumStats, Blessing } from '@/types/album'
 
 /** 留言牆：GET /api/blessings，新的在上 */
@@ -63,7 +64,11 @@ function onSaved(_blessing: Blessing, isNew: boolean) {
 }
 
 async function remove(blessing: Blessing) {
-  if (!window.confirm('確定要刪除這則祝福嗎？刪除後無法復原。')) return
+  const question =
+    blessing.guest.id === session.guestId
+      ? '確定要刪除這則祝福嗎？刪除後無法復原。'
+      : `以管理員身分刪除「${blessing.guest.nickname}」的祝福？刪除後無法復原。`
+  if (!window.confirm(question)) return
   try {
     await deleteBlessing(blessing.id)
     removeBlessing(blessing.id)

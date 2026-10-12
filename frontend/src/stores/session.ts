@@ -10,6 +10,7 @@ const NICKNAME_KEY = 'wedding-album:nickname'
 const RELATION_KEY = 'wedding-album:relation'
 const TOKEN_KEY = 'wedding-album:token'
 const GUEST_ID_KEY = 'wedding-album:guest-id'
+const ADMIN_KEY = 'wedding-album:admin'
 const EVENT_CODE_KEY = 'wedding-album:event-code'
 
 function read(key: string): string {
@@ -48,6 +49,8 @@ export const session = reactive({
   token: read(TOKEN_KEY),
   /** 自己的賓客 id，用來判斷哪些祝福是自己寫的（才顯示修改、刪除） */
   guestId: read(GUEST_ID_KEY),
+  /** 管理員可以刪除任何照片與祝福。以後端 /api/me 的 isAdmin 為準，這裡只是記一份 */
+  isAdmin: read(ADMIN_KEY) === '1',
   eventCode: initialEventCode(),
   /** 賓客自己輸入的暱稱，這個 app 沒有帳號密碼 */
   nickname: read(NICKNAME_KEY),
@@ -73,12 +76,19 @@ export function setGuestId(id: string) {
   write(GUEST_ID_KEY, id)
 }
 
+export function setAdmin(isAdmin: boolean) {
+  session.isAdmin = isAdmin
+  write(ADMIN_KEY, isAdmin ? '1' : '')
+}
+
 /** token 失效時清掉身分。暱稱留著，重新加入時歡迎頁可以直接帶入 */
 export function clearToken() {
   session.token = ''
   session.guestId = ''
+  session.isAdmin = false
   write(TOKEN_KEY, '')
   write(GUEST_ID_KEY, '')
+  write(ADMIN_KEY, '')
 }
 
 /** 使用者從系統選取器挑到的檔案 */

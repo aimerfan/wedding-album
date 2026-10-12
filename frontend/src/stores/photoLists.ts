@@ -157,3 +157,11 @@ export function updatePhoto(photo: Photo) {
     }
   }
 }
+
+/** 照片被刪了：從每一串列表拿掉 */
+export function removePhoto(id: string) {
+  for (const { state } of lists.values()) {
+    const i = state.items.findIndex((p) => p.id === id)
+    if (i >= 0) state.items.splice(i, 1)
+  }
+}

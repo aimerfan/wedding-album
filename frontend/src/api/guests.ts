@@ -1,5 +1,5 @@
 /** 身分相關的 API。見 docs/api.md 的「身分」。 */
-import { session, setGuestId, setProfile } from '@/stores/session'
+import { session, setAdmin, setGuestId, setProfile } from '@/stores/session'
 import type { Guest } from '@/types/album'
 import { api } from './client'
 
@@ -28,7 +28,7 @@ export interface MyStats {
 }
 
 export function fetchMe() {
-  return api<{ guest: Guest; stats: MyStats }>('/me')
+  return api<{ guest: Guest; isAdmin: boolean; stats: MyStats }>('/me')
 }
 
 /**
@@ -39,6 +39,7 @@ export async function ensureGuestId() {
   if (!session.token || session.guestId) return
   const me = await fetchMe()
   setGuestId(me.guest.id)
+  setAdmin(me.isAdmin)
   setProfile(me.guest.nickname, me.guest.relation ?? '')
 }
 
@@ -50,4 +51,12 @@ export function createTransferCode() {
 /** 在這個裝置用接續碼換一組新的 token。原本的裝置不會被登出 */
 export function claimTransferCode(code: string) {
   return api<JoinResult>('/guests/claim', { method: 'POST', body: { transferCode: code } })
+}
+
+/** 用管理員代碼把自己開通成管理員（/admin?code=…） */
+export function becomeAdmin(code: string) {
+  return api<{ guest: Guest; isAdmin: boolean }>('/me/admin', {
+    method: 'POST',
+    body: { adminCode: code },
+  })
 }

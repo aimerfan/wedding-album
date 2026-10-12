@@ -6,7 +6,7 @@ import { joinAlbum, updateMe } from '@/api/guests'
 import PhotoTile from '@/components/PhotoTile.vue'
 import DecoDivider from '@/components/DecoDivider.vue'
 import { wedding } from '@/config/wedding'
-import { session, setGuestId, setProfile, setToken } from '@/stores/session'
+import { session, setAdmin, setGuestId, setProfile, setToken } from '@/stores/session'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,6 +35,7 @@ async function enter() {
       ? await updateMe(nickname, relation.value.trim())
       : await joinAlbum(session.eventCode, nickname, relation.value.trim()).then((r) => {
           setToken(r.token)
+          setAdmin(false) // 新加入的賓客一定不是管理員
           return r
         })
     setProfile(guest.nickname, guest.relation ?? '')

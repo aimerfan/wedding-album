@@ -5,7 +5,7 @@ import type { Blessing } from '@/types/album'
 
 /**
  * 一則祝福，像一張便條紙。留言牆與「我的 → 我的祝福」共用。
- * 自己寫的祝福右上角有「⋯」，可以修改或刪除。
+ * 自己寫的祝福右上角有「⋯」，可以修改或刪除；管理員看別人的祝福只能刪除（不能替人改內容）。
  */
 const props = defineProps<{
   blessing: Blessing
@@ -16,6 +16,8 @@ const props = defineProps<{
 const emit = defineEmits<{ edit: [Blessing]; delete: [Blessing] }>()
 
 const mine = computed(() => !!session.guestId && props.blessing.guest.id === session.guestId)
+/** 真正的權限由後端把關，這裡只決定要不要顯示選單 */
+const canDelete = computed(() => mine.value || session.isAdmin)
 
 /** 把 ISO 時間轉成「剛剛 / 12 分鐘前 / 1 小時前」 */
 function relativeTime(iso: string) {
@@ -63,7 +65,7 @@ function choose(action: 'edit' | 'delete') {
         </p>
       </div>
 
-      <div v-if="mine" class="menu">
+      <div v-if="canDelete" class="menu">
         <button
           class="menu-btn"
           type="button"
@@ -78,7 +80,7 @@ function choose(action: 'edit' | 'delete') {
           </svg>
         </button>
         <div v-if="menuOpen" class="menu-pop" role="menu">
-          <button type="button" role="menuitem" @click="choose('edit')">修改</button>
+          <button v-if="mine" type="button" role="menuitem" @click="choose('edit')">修改</button>
           <button type="button" role="menuitem" class="danger" @click="choose('delete')">
             刪除
           </button>
