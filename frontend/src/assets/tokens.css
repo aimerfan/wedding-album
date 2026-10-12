@@ -49,4 +49,10 @@
   /* 各畫面頂部內距：設計稿的 56px 是狀態列高度，真實裝置改用 safe-area */
   --page-top: calc(var(--safe-top) + 16px);
   --page-bottom: calc(var(--tabbar-height) + var(--safe-bottom));
+
+  /*
+   * 整個螢幕的高度。佔滿螢幕的畫面一律用這個，不要直接寫 100dvh：
+   * 字體放大（stores/textSize.ts 的 CSS zoom）時 100dvh 也會被放大而超出螢幕，要除回去
+   */
+  --screen-h: calc(100dvh / var(--text-zoom, 1));
 }

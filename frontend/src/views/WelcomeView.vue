@@ -6,6 +6,7 @@ import { joinAlbum, signInWithTransferCode, updateMe } from '@/api/guests'
 import DecoDivider from '@/components/DecoDivider.vue'
 import InstallGuide from '@/components/InstallGuide.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
+import TextSizePicker from '@/components/TextSizePicker.vue'
 import { installGuideKind } from '@/composables/usePlatform'
 import { wedding } from '@/config/wedding'
 import { session, setAdmin, setGuestId, setProfile, setToken } from '@/stores/session'
@@ -108,6 +109,8 @@ async function enter() {
       <PhotoTile :index="0" ratio="auto" class="hero-photo" />
       <div class="hero-fade" />
       <p class="kicker">{{ wedding.kicker }}</p>
+      <!-- 長輩一進來就看得到：右上角的「Aa」可以把字放大 -->
+      <TextSizePicker compact class="text-size" />
     </div>
 
     <div class="content">
@@ -197,7 +200,7 @@ async function enter() {
 
 <style scoped>
 .welcome {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-bg);
   color: var(--c-ink);
 }
@@ -208,7 +211,7 @@ async function enter() {
  */
 .hero {
   position: relative;
-  height: clamp(220px, 100dvh - 470px, 380px);
+  height: clamp(220px, var(--screen-h) - 470px, 380px);
   overflow: hidden;
 }
 
@@ -223,11 +226,19 @@ async function enter() {
   background: linear-gradient(180deg, transparent 0%, transparent 50%, var(--c-bg) 100%);
 }
 
+.text-size {
+  position: absolute;
+  top: calc(var(--safe-top) + 20px);
+  right: 16px;
+  z-index: 5;
+}
+
 .kicker {
   position: absolute;
   top: calc(var(--safe-top) + 32px);
-  left: 0;
-  right: 0;
+  /* 左右讓出右上角「Aa」的寬度，字放大時才不會疊在一起 */
+  left: 60px;
+  right: 60px;
   margin: 0;
   text-align: center;
   color: #fff;

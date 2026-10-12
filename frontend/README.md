@@ -29,6 +29,8 @@ npm run dev
 - 所有 API 呼叫都經過 `src/api/client.ts`，它負責帶 token、把錯誤統一成 `ApiError`。
 - 活動碼從會場 QR code 的網址 `?code=...` 讀取並記在手機上；開發時沒有 QR code，自動用後端的開發值 `dev`。
 - 色票與版面尺寸的唯一來源是 `src/assets/tokens.css`，不要在元件裡寫死顏色。
+- 佔滿螢幕高度一律用 `var(--screen-h)`，**不要直接寫 `100dvh`**：字體大小（`stores/textSize.ts`）用 CSS zoom 放大整個畫面，
+  `100dvh` 會跟著被放大而超出螢幕，`--screen-h` 有除回去。
   `docs/design/extracted/` 裡的 `A` 物件是設計稿的凍結快照，不是現行來源。
 - 照片列表一律透過 `src/stores/photoLists.ts` 取得：同樣的篩選條件共用同一份快取，
   照片詳情頁靠網址上的條件（例如 `?uploader=me`）找到使用者是從哪一串點進來的，左右滑只在那一串裡換。

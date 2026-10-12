@@ -11,6 +11,7 @@ import ContinueSheet from '@/components/ContinueSheet.vue'
 import InstallGuide from '@/components/InstallGuide.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import ProfileSheet from '@/components/ProfileSheet.vue'
+import TextSizePicker from '@/components/TextSizePicker.vue'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { installGuideKind } from '@/composables/usePlatform'
 import {
@@ -178,6 +179,8 @@ const guideOpen = ref(false)
       </div>
     </header>
 
+    <TextSizePicker class="text-size" />
+
     <div v-if="guideKind" class="install">
       <InstallGuide v-if="guideOpen" :kind="guideKind" @close="guideOpen = false" />
       <button v-else class="install-btn" type="button" @click="guideOpen = true">
@@ -242,7 +245,7 @@ const guideOpen = ref(false)
 <style scoped>
 .me {
   position: relative;
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-bg);
   color: var(--c-ink);
 }
@@ -378,6 +381,10 @@ const guideOpen = ref(false)
   font-size: 10px;
   letter-spacing: 1px;
   color: var(--c-ink-mute);
+}
+
+.text-size {
+  margin: 14px 20px 0;
 }
 
 .install {

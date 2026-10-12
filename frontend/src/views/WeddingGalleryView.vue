@@ -183,7 +183,7 @@ function close() {
 
 <style scoped>
 .gallery {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-dark-bg);
   color: var(--c-dark-ink);
 }

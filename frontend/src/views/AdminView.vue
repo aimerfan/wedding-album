@@ -63,7 +63,7 @@ onMounted(async () => {
 
 <style scoped>
 .admin {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   padding: calc(var(--page-top) + 80px) 24px 40px;
   background: var(--c-bg);
   color: var(--c-ink);

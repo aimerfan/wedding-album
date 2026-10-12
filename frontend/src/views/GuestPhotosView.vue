@@ -77,7 +77,7 @@ function back() {
 
 <style scoped>
 .guest {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-bg);
   color: var(--c-ink);
 }

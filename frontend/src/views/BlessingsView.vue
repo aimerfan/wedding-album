@@ -139,7 +139,7 @@ async function remove(blessing: Blessing) {
 
 <style scoped>
 .blessings {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-bg);
   color: var(--c-ink);
 }

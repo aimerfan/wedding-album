@@ -35,7 +35,7 @@ a {
 }
 
 #app {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
 }
 
 @keyframes blink {

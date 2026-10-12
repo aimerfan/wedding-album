@@ -314,7 +314,7 @@ function toggleFavorite() {
 
 <style scoped>
 .detail {
-  height: 100dvh;
+  height: var(--screen-h);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -412,7 +412,7 @@ function toggleFavorite() {
 /* 留言區固定貼底；祝福太長時在面板內捲動，不把照片擠掉 */
 .panel {
   flex-shrink: 0;
-  max-height: 55dvh;
+  max-height: calc(var(--screen-h) * 0.55);
   overflow-y: auto;
   background: var(--c-bg);
   color: var(--c-ink);

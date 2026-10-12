@@ -182,7 +182,7 @@ function duration(seconds?: number | null) {
 
 .feed {
   background: var(--c-bg);
-  min-height: 100dvh;
+  min-height: var(--screen-h);
 }
 
 .head {

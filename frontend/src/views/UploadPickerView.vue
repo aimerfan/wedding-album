@@ -150,7 +150,7 @@ function next() {
 
 <style scoped>
 .picker {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-bg);
   color: var(--c-ink);
   padding-bottom: 120px;

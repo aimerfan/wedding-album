@@ -12,7 +12,7 @@ import AppTabBar from '@/components/AppTabBar.vue'
 
 <style scoped>
 .shell {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   /* 讓內容不被 tab bar 蓋住 */
   padding-bottom: var(--page-bottom);
 }

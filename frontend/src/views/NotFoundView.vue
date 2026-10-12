@@ -14,7 +14,7 @@ import DecoDivider from '@/components/DecoDivider.vue'
 
 <style scoped>
 .page {
-  min-height: 100dvh;
+  min-height: var(--screen-h);
   background: var(--c-bg);
   color: var(--c-ink);
   display: flex;
