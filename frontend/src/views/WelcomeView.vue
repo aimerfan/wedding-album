@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import { joinAlbum, signInWithTransferCode, updateMe } from '@/api/guests'
 import DecoDivider from '@/components/DecoDivider.vue'
 import InstallGuide from '@/components/InstallGuide.vue'
+import KahootLink from '@/components/KahootLink.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import TextSizePicker from '@/components/TextSizePicker.vue'
 import { installGuideKind } from '@/composables/usePlatform'
@@ -129,6 +130,8 @@ async function enter() {
         請留下你的名字<br />
         一起記錄這個值得收藏的日子
       </p>
+
+      <KahootLink />
 
       <label class="field">
         <span class="field-label">你的名字</span>

@@ -9,18 +9,26 @@ const FALLBACK: AlbumConfig = {
   uploadConcurrency: 3,
   maxBlessingLength: 200,
   uploadsOpen: true,
+  kahootUrl: null,
 }
 
 /**
- * 後端定義的各種上限（GET /api/config），畫面上直接綁這個。
- * 一開始先用保底值，後端回來後自動換成真的；上限只在後端設定一份。
+ * 全站共用一份：管理員在「我的」頁改了 Kahoot! 連結，同一頁上的按鈕馬上跟著變。
+ * 一開始先用保底值，後端回來後換成真的；上限只在後端設定一份。
  */
+const shared = reactive<AlbumConfig>({ ...FALLBACK })
+
+/** 後端定義的各種上限與設定（GET /api/config）。每次用到都重新問一次，Kahoot! 連結才會是最新的 */
 export function useAlbumConfig(): AlbumConfig {
-  const config = reactive({ ...FALLBACK })
-  fetchConfig()
-    .then((c) => Object.assign(config, c))
+  fetchConfig(true)
+    .then((c) => Object.assign(shared, c))
     .catch(() => {
-      // 拿不到就沿用保底值，不擋住畫面
+      // 拿不到就沿用目前的值，不擋住畫面
     })
-  return config
+  return shared
+}
+
+/** 管理員改了 Kahoot! 連結後，直接更新共用的那份 */
+export function setSharedKahootUrl(url: string | null) {
+  shared.kahootUrl = url
 }

@@ -21,6 +21,11 @@
   --c-rose-soft: #d9a9ae;
   --c-gold: #c9a86a;
 
+  /* 外部品牌色：要跟對方的介面一致，賓客才認得出來 */
+  --c-kahoot: #46178f; /* Kahoot! 的紫 */
+  --c-kahoot-soft: #e9d4ff; /* Kahoot! 按鈕的底色 */
+  --c-ios-blue: #007aff; /* iPhone Safari 分享按鈕的藍 */
+
   /* 線條 */
   --c-line: rgba(61, 46, 38, 0.1);
   --c-line-strong: rgba(61, 46, 38, 0.18);

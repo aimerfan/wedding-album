@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { deleteBlessing } from '@/api/blessings'
+import { setKahootUrl } from '@/api/config'
 import { ApiError } from '@/api/client'
 import { fetchMe, type MyStats } from '@/api/guests'
 import type { PhotoFilter } from '@/api/photos'
@@ -9,9 +10,11 @@ import BlessingComposer from '@/components/BlessingComposer.vue'
 import BlessingNote from '@/components/BlessingNote.vue'
 import ContinueSheet from '@/components/ContinueSheet.vue'
 import InstallGuide from '@/components/InstallGuide.vue'
+import KahootLink from '@/components/KahootLink.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import ProfileSheet from '@/components/ProfileSheet.vue'
 import TextSizePicker from '@/components/TextSizePicker.vue'
+import { setSharedKahootUrl, useAlbumConfig } from '@/composables/useAlbumConfig'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { installGuideKind } from '@/composables/usePlatform'
 import {
@@ -120,6 +123,35 @@ async function remove(blessing: Blessing) {
 const continueOpen = ref(false)
 const profileOpen = ref(false)
 
+// --- 管理員：設定 Kahoot! 連結 ---------------------------------------------
+// 遊戲的 PIN 碼要到主持人開始遊戲才知道，所以由管理員當場貼上，大家的按鈕就會出現
+
+const albumConfig = useAlbumConfig()
+const kahootDraft = ref('')
+const kahootSaving = ref(false)
+const kahootMessage = ref('')
+
+watch(
+  () => albumConfig.kahootUrl,
+  (url) => (kahootDraft.value = url ?? ''),
+  { immediate: true },
+)
+
+async function saveKahoot(url: string) {
+  kahootSaving.value = true
+  kahootMessage.value = ''
+  try {
+    const { kahootUrl } = await setKahootUrl(url)
+    setSharedKahootUrl(kahootUrl)
+    kahootDraft.value = kahootUrl ?? ''
+    kahootMessage.value = kahootUrl ? '已儲存。其他人重新整理或切換頁面就會看到' : '已拿掉，按鈕不再顯示'
+  } catch (e) {
+    kahootMessage.value = e instanceof ApiError ? e.message : '儲存失敗，請稍後再試'
+  } finally {
+    kahootSaving.value = false
+  }
+}
+
 /** 「加到主畫面」：手機、而且還沒從主畫面打開時才有這個入口 */
 const guideKind = installGuideKind()
 const guideOpen = ref(false)
@@ -179,7 +211,42 @@ const guideOpen = ref(false)
       </div>
     </header>
 
+    <KahootLink class="kahoot-link" />
+
     <TextSizePicker class="text-size" />
+
+    <section v-if="session.isAdmin" class="admin-box" aria-label="管理員設定">
+      <h2>Kahoot! 連結（管理員）</h2>
+      <p class="admin-hint">主持人開始遊戲後，把加入連結貼在這裡，所有人的歡迎頁與「我的」頁就會出現按鈕。</p>
+      <input
+        v-model="kahootDraft"
+        class="admin-input"
+        type="url"
+        inputmode="url"
+        placeholder="https://kahoot.it/?pin=…"
+        aria-label="Kahoot! 連結"
+      />
+      <div class="admin-actions">
+        <button
+          class="admin-save"
+          type="button"
+          :disabled="kahootSaving || !kahootDraft.trim()"
+          @click="saveKahoot(kahootDraft)"
+        >
+          儲存
+        </button>
+        <button
+          v-if="albumConfig.kahootUrl"
+          class="admin-clear"
+          type="button"
+          :disabled="kahootSaving"
+          @click="saveKahoot('')"
+        >
+          拿掉
+        </button>
+      </div>
+      <p v-if="kahootMessage" class="admin-hint">{{ kahootMessage }}</p>
+    </section>
 
     <div v-if="guideKind" class="install">
       <InstallGuide v-if="guideOpen" :kind="guideKind" @close="guideOpen = false" />
@@ -383,8 +450,76 @@ const guideOpen = ref(false)
   color: var(--c-ink-mute);
 }
 
+.kahoot-link {
+  margin: 14px 20px 0;
+  width: auto;
+}
+
 .text-size {
   margin: 14px 20px 0;
+}
+
+.admin-box {
+  margin: 14px 20px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px dashed var(--c-rose-soft);
+  background: var(--c-card);
+}
+
+.admin-box h2 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-rose);
+}
+
+.admin-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--c-ink-mute);
+}
+
+/* 16px 以上 iOS 點進輸入框時才不會自動放大畫面 */
+.admin-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  background: var(--c-bg);
+  font-size: 16px;
+  color: var(--c-ink);
+}
+
+.admin-actions {
+  margin: 8px 0;
+  display: flex;
+  gap: 8px;
+}
+
+.admin-save,
+.admin-clear {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 18px;
+  font-size: 13px;
+}
+
+.admin-save {
+  border: 0;
+  background: var(--c-rose);
+  color: #fff;
+}
+
+.admin-save:disabled {
+  opacity: 0.45;
+}
+
+.admin-clear {
+  border: 1px solid var(--c-line-strong);
+  background: transparent;
+  color: var(--c-ink-soft);
 }
 
 .install {

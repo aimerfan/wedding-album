@@ -113,7 +113,7 @@ defineEmits<{ close: [] }>()
   width: 18px;
   height: 18px;
   vertical-align: -3px;
-  color: #007aff; /* iOS 系統藍，跟 Safari 上的按鈕同色，比較好認 */
+  color: var(--c-ios-blue); /* 跟 Safari 上的按鈕同色，比較好認 */
 }
 
 .hint {
