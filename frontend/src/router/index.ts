@@ -34,6 +34,8 @@ const router = createRouter({
 
     // 全螢幕畫面（沒有 tab bar）
     { path: '/welcome', name: 'welcome', component: () => import('@/views/WelcomeView.vue') },
+    // 接續連結：在另一個裝置延續同一位賓客，不需要先加入相簿
+    { path: '/continue', name: 'continue', component: () => import('@/views/ContinueView.vue') },
     { path: '/upload', name: 'upload', component: () => import('@/views/UploadPickerView.vue') },
     {
       path: '/upload/edit',
@@ -64,7 +66,7 @@ const router = createRouter({
  * 加入之後原本要去的網址記在 redirect，加入完再帶過去（例如分享出去的照片連結）。
  */
 router.beforeEach((to) => {
-  if (to.name === 'welcome') return true
+  if (to.name === 'welcome' || to.name === 'continue') return true
   if (!session.token) {
     return to.fullPath === '/'
       ? { name: 'welcome' }

@@ -41,3 +41,13 @@ export async function ensureGuestId() {
   setGuestId(me.guest.id)
   setProfile(me.guest.nickname, me.guest.relation ?? '')
 }
+
+/** 產生接續碼。完整連結由前端組：前後端可能不同網域，後端不知道前端的網址 */
+export function createTransferCode() {
+  return api<{ code: string; expiresAt: string }>('/me/transfer-codes', { method: 'POST' })
+}
+
+/** 在這個裝置用接續碼換一組新的 token。原本的裝置不會被登出 */
+export function claimTransferCode(code: string) {
+  return api<JoinResult>('/guests/claim', { method: 'POST', body: { transferCode: code } })
+}

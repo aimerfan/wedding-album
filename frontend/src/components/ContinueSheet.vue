@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ApiError } from '@/api/client'
+import { createTransferCode } from '@/api/guests'
 
 /**
  * 「在其他裝置繼續」：產生一條一次性連結，在別的瀏覽器或電腦打開就是同一位賓客。
@@ -10,6 +12,8 @@ const open = defineModel<boolean>({ required: true })
 const link = ref('')
 const expiresAt = ref<Date | null>(null)
 const copied = ref(false)
+const loading = ref(false)
+const error = ref('')
 
 const canShare = typeof navigator !== 'undefined' && 'share' in navigator
 
@@ -24,12 +28,21 @@ watch(open, (isOpen) => {
   if (isOpen) generate()
 })
 
-function generate() {
-  // TODO: 接後端 API（POST /api/me/transfer-codes）。現在是假的接續碼，打開也不會有作用
-  const code = Math.random().toString(36).slice(2, 8).toUpperCase()
-  link.value = `${window.location.origin}/continue?code=${code}`
-  expiresAt.value = new Date(Date.now() + 30 * 60 * 1000)
+async function generate() {
+  link.value = ''
   copied.value = false
+  error.value = ''
+  loading.value = true
+  try {
+    const { code, expiresAt: expires } = await createTransferCode()
+    // 連結由前端組：前後端可能不同網域，後端不知道前端的網址
+    link.value = `${window.location.origin}/continue?code=${code}`
+    expiresAt.value = new Date(expires)
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : '產生連結失敗，請稍後再試'
+  } finally {
+    loading.value = false
+  }
 }
 
 async function copy() {
@@ -62,15 +75,30 @@ async function share() {
           在那邊打開這條連結，就會延續你現在的身分。
         </p>
 
-        <!-- user-select: all，點一下就整串選起來，沒有剪貼簿權限時也能手動複製 -->
-        <p class="link">{{ link }}</p>
-        <p class="note">{{ expiresLabel }} 前有效，只能使用一次。請不要傳給別人。</p>
+        <p v-if="loading" class="link muted">產生連結中…</p>
+        <p v-else-if="error" class="link error" role="alert">
+          {{ error }}
+          <button class="retry" type="button" @click="generate">重試</button>
+        </p>
+        <template v-else>
+          <!-- user-select: all，點一下就整串選起來，沒有剪貼簿權限時也能手動複製 -->
+          <p class="link">{{ link }}</p>
+          <p class="note">{{ expiresLabel }} 前有效，只能使用一次。請不要傳給別人。</p>
+        </template>
 
         <div class="actions">
-          <button class="primary" type="button" @click="copy">
+          <button class="primary" type="button" :disabled="!link" @click="copy">
             {{ copied ? '已複製' : '複製連結' }}
           </button>
-          <button v-if="canShare" class="secondary" type="button" @click="share">分享</button>
+          <button
+            v-if="canShare"
+            class="secondary"
+            type="button"
+            :disabled="!link"
+            @click="share"
+          >
+            分享
+          </button>
         </div>
 
         <button class="close" type="button" @click="open = false">關閉</button>
@@ -134,6 +162,34 @@ h2 {
   font-size: 12px;
   word-break: break-all;
   user-select: all;
+}
+
+.link.muted {
+  color: var(--c-ink-mute);
+  font-family: inherit;
+  user-select: none;
+}
+
+.link.error {
+  color: var(--c-rose);
+  font-family: inherit;
+  user-select: none;
+}
+
+.retry {
+  margin-left: 8px;
+  padding: 2px 10px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-ink);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 .note {
