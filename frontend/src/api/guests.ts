@@ -1,5 +1,6 @@
 /** 身分相關的 API。見 docs/api.md 的「身分」。 */
-import { session, setAdmin, setGuestId, setProfile } from '@/stores/session'
+import { invalidateAll } from '@/stores/photoLists'
+import { session, setAdmin, setGuestId, setProfile, setToken } from '@/stores/session'
 import type { Guest } from '@/types/album'
 import { api } from './client'
 
@@ -59,4 +60,20 @@ export function becomeAdmin(code: string) {
     method: 'POST',
     body: { adminCode: code },
   })
+}
+
+/**
+ * 用接續碼換成那位賓客：/continue 連結與歡迎頁的「輸入接續碼」共用。
+ * 失敗時丟出 ApiError，呼叫的地方自己顯示訊息。
+ */
+export async function signInWithTransferCode(code: string) {
+  const { token, guest } = await claimTransferCode(code)
+  setToken(token)
+  setGuestId(guest.id)
+  // 換了身分，管理員狀態不能沿用；新身分若是管理員，進「我的」頁時會從後端補上
+  setAdmin(false)
+  setProfile(guest.nickname, guest.relation ?? '')
+  // 之前快取的「我上傳的」「收藏」都不再是自己的
+  invalidateAll()
+  return guest
 }

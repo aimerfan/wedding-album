@@ -8,9 +8,11 @@ import type { PhotoFilter } from '@/api/photos'
 import BlessingComposer from '@/components/BlessingComposer.vue'
 import BlessingNote from '@/components/BlessingNote.vue'
 import ContinueSheet from '@/components/ContinueSheet.vue'
+import InstallGuide from '@/components/InstallGuide.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import ProfileSheet from '@/components/ProfileSheet.vue'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { installGuideKind } from '@/composables/usePlatform'
 import {
   ensureBlessingsLoaded,
   getBlessingList,
@@ -116,6 +118,10 @@ async function remove(blessing: Blessing) {
 
 const continueOpen = ref(false)
 const profileOpen = ref(false)
+
+/** 「加到主畫面」：手機、而且還沒從主畫面打開時才有這個入口 */
+const guideKind = installGuideKind()
+const guideOpen = ref(false)
 </script>
 
 <template>
@@ -171,6 +177,13 @@ const profileOpen = ref(false)
         </div>
       </div>
     </header>
+
+    <div v-if="guideKind" class="install">
+      <InstallGuide v-if="guideOpen" :kind="guideKind" @close="guideOpen = false" />
+      <button v-else class="install-btn" type="button" @click="guideOpen = true">
+        加到主畫面，下次一點就能打開
+      </button>
+    </div>
 
     <nav class="tabs">
       <button
@@ -365,6 +378,21 @@ const profileOpen = ref(false)
   font-size: 10px;
   letter-spacing: 1px;
   color: var(--c-ink-mute);
+}
+
+.install {
+  margin: 14px 20px 0;
+}
+
+.install-btn {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--c-line-strong);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
 }
 
 .tabs {

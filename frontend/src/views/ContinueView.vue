@@ -2,9 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
-import { claimTransferCode } from '@/api/guests'
-import { invalidateAll } from '@/stores/photoLists'
-import { session, setAdmin, setGuestId, setProfile, setToken } from '@/stores/session'
+import { signInWithTransferCode } from '@/api/guests'
+import { session } from '@/stores/session'
 
 /**
  * 在另一個瀏覽器或裝置打開「接續連結」的地方：/continue?code=XXXXXXXX
@@ -28,14 +27,7 @@ async function claim() {
   }
   state.value = 'working'
   try {
-    const { token, guest } = await claimTransferCode(code.value)
-    setToken(token)
-    setGuestId(guest.id)
-    // 換了身分，管理員狀態不能沿用；新身分若是管理員，進「我的」頁時會從後端補上
-    setAdmin(false)
-    setProfile(guest.nickname, guest.relation ?? '')
-    // 換了身分，之前快取的「我上傳的」「收藏」都不再是自己的
-    invalidateAll()
+    await signInWithTransferCode(code.value)
     router.replace({ name: 'feed' })
   } catch (e) {
     state.value = 'error'

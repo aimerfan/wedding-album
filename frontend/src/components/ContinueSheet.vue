@@ -10,8 +10,11 @@ import { createTransferCode } from '@/api/guests'
 const open = defineModel<boolean>({ required: true })
 
 const link = ref('')
+/** 接續碼本身。從主畫面打開的 app 沒有網址列，貼不了連結，要在那邊的歡迎頁輸入這 8 碼 */
+const code = ref('')
 const expiresAt = ref<Date | null>(null)
-const copied = ref(false)
+/** 剛剛複製的是哪一個，按鈕上顯示「已複製」 */
+const copied = ref<'' | 'link' | 'code'>('')
 const loading = ref(false)
 const error = ref('')
 
@@ -30,15 +33,17 @@ watch(open, (isOpen) => {
 
 async function generate() {
   link.value = ''
-  copied.value = false
+  code.value = ''
+  copied.value = ''
   copyFailed.value = false
   error.value = ''
   loading.value = true
   try {
-    const { code, expiresAt: expires } = await createTransferCode()
+    const created = await createTransferCode()
+    code.value = created.code
     // 連結由前端組：前後端可能不同網域，後端不知道前端的網址
-    link.value = `${window.location.origin}/continue?code=${code}`
-    expiresAt.value = new Date(expires)
+    link.value = `${window.location.origin}/continue?code=${created.code}`
+    expiresAt.value = new Date(created.expiresAt)
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '產生連結失敗，請稍後再試'
   } finally {
@@ -72,19 +77,21 @@ function legacyCopy(text: string): boolean {
   return ok
 }
 
-async function copy() {
+async function copy(which: 'link' | 'code') {
+  const text = which === 'link' ? link.value : code.value
   copyFailed.value = false
   try {
     if (navigator.clipboard) {
-      await navigator.clipboard.writeText(link.value)
-      copied.value = true
+      await navigator.clipboard.writeText(text)
+      copied.value = which
       return
     }
   } catch {
     // 有 clipboard 但被拒絕（權限、瀏覽器限制），改用舊方法
   }
-  copied.value = legacyCopy(link.value)
-  copyFailed.value = !copied.value
+  const ok = legacyCopy(text)
+  copied.value = ok ? which : ''
+  copyFailed.value = !ok
 }
 
 async function share() {
@@ -104,35 +111,43 @@ async function share() {
         <h2>在其他裝置繼續</h2>
         <p class="intro">
           想換瀏覽器，或回家用電腦上傳照片？<br />
-          在那邊打開這條連結，就會延續你現在的身分。
+          用下面任一種方式，就會延續你現在的身分。
         </p>
 
-        <p v-if="loading" class="link muted">產生連結中…</p>
+        <p v-if="loading" class="link muted">產生中…</p>
         <p v-else-if="error" class="link error" role="alert">
           {{ error }}
           <button class="retry" type="button" @click="generate">重試</button>
         </p>
         <template v-else>
-          <!-- user-select: all，點一下就整串選起來，沒有剪貼簿權限時也能手動複製 -->
-          <p class="link">{{ link }}</p>
-          <p class="note">{{ expiresLabel }} 前有效，只能使用一次。請不要傳給別人。</p>
-          <p v-if="copyFailed" class="note warn">這支手機不能自動複製，請長按上面的連結手動複製</p>
-        </template>
+          <!-- 方式一：瀏覽器、電腦，直接打開連結 -->
+          <section class="way">
+            <h3>在瀏覽器或電腦打開</h3>
+            <!-- user-select: all，點一下就整串選起來，沒有剪貼簿權限時也能手動複製 -->
+            <p class="link">{{ link }}</p>
+            <div class="actions">
+              <button class="primary" type="button" @click="copy('link')">
+                {{ copied === 'link' ? '已複製' : '複製連結' }}
+              </button>
+              <button v-if="canShare" class="secondary" type="button" @click="share">分享</button>
+            </div>
+          </section>
 
-        <div class="actions">
-          <button class="primary" type="button" :disabled="!link" @click="copy">
-            {{ copied ? '已複製' : '複製連結' }}
-          </button>
-          <button
-            v-if="canShare"
-            class="secondary"
-            type="button"
-            :disabled="!link"
-            @click="share"
-          >
-            分享
-          </button>
-        </div>
+          <!-- 方式二：主畫面的 app 沒有網址列，貼不了連結，改輸入接續碼 -->
+          <section class="way">
+            <h3>從主畫面打開的相簿</h3>
+            <p class="way-hint">在那邊的歡迎頁點「已經加入過？」，輸入這組接續碼</p>
+            <div class="code-box">
+              <span class="code-value">{{ code }}</span>
+              <button class="code-copy" type="button" @click="copy('code')">
+                {{ copied === 'code' ? '已複製' : '複製接續碼' }}
+              </button>
+            </div>
+          </section>
+
+          <p v-if="copyFailed" class="note warn">這支手機不能自動複製，請長按連結或接續碼手動複製</p>
+          <p class="note">{{ expiresLabel }} 前有效，只能使用一次。請不要傳給別人。</p>
+        </template>
 
         <button class="close" type="button" @click="open = false">關閉</button>
       </section>
@@ -223,6 +238,61 @@ h2 {
 .secondary:disabled {
   opacity: 0.45;
   box-shadow: none;
+}
+
+.way {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--c-line);
+  text-align: left;
+}
+
+.way h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.way-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--c-ink-mute);
+}
+
+.way .link {
+  margin-top: 0;
+}
+
+.way .actions {
+  margin-top: 10px;
+}
+
+.code-box {
+  padding: 10px 12px 10px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--c-line-strong);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.code-value {
+  flex: 1;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 20px;
+  letter-spacing: 3px;
+  user-select: all;
+}
+
+.code-copy {
+  padding: 8px 12px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 16px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-ink);
+  white-space: nowrap;
 }
 
 .note.warn {

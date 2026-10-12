@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
-import { joinAlbum, updateMe } from '@/api/guests'
-import PhotoTile from '@/components/PhotoTile.vue'
+import { joinAlbum, signInWithTransferCode, updateMe } from '@/api/guests'
 import DecoDivider from '@/components/DecoDivider.vue'
+import InstallGuide from '@/components/InstallGuide.vue'
+import PhotoTile from '@/components/PhotoTile.vue'
+import { installGuideKind } from '@/composables/usePlatform'
 import { wedding } from '@/config/wedding'
 import { session, setAdmin, setGuestId, setProfile, setToken } from '@/stores/session'
 
@@ -17,6 +19,54 @@ const relation = ref(session.relation)
 
 const submitting = ref(false)
 const error = ref('')
+
+// --- 加到主畫面的引導 -----------------------------------------------------
+// 只在 iPhone Safari 與 LINE／IG 內建瀏覽器顯示：iPhone 上 Safari 與主畫面的資料是分開的，
+// 要在「加入之前」引導，才不會一個人變成兩位賓客。Android 沒有這個問題，引導放在「我的」頁就好。
+
+const GUIDE_DISMISSED_KEY = 'wedding-album:install-guide-dismissed'
+const kind = installGuideKind()
+const showGuide = ref((kind === 'ios-safari' || kind === 'in-app') && !readDismissed())
+
+function readDismissed() {
+  try {
+    return localStorage.getItem(GUIDE_DISMISSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function dismissGuide() {
+  showGuide.value = false
+  try {
+    localStorage.setItem(GUIDE_DISMISSED_KEY, '1')
+  } catch {
+    // 存不了就下次再顯示一次，沒關係
+  }
+}
+
+// --- 已經加入過：輸入接續碼 -----------------------------------------------
+// 從主畫面打開的 app 沒有網址列，貼不了接續連結，所以讓人直接輸入 8 碼接續碼
+
+const showCodeInput = ref(false)
+const transferCode = ref('')
+const claiming = ref(false)
+const codeError = ref('')
+
+async function useTransferCode() {
+  const code = transferCode.value.trim()
+  if (!code || claiming.value) return
+  claiming.value = true
+  codeError.value = ''
+  try {
+    await signInWithTransferCode(code)
+    router.replace({ name: 'feed' })
+  } catch (e) {
+    codeError.value = e instanceof ApiError ? e.message : '發生錯誤，請稍後再試'
+  } finally {
+    claiming.value = false
+  }
+}
 
 async function enter() {
   const nickname = name.value.trim()
@@ -69,6 +119,8 @@ async function enter() {
 
       <p class="date">{{ wedding.dateDisplay }}</p>
 
+      <InstallGuide v-if="showGuide && kind" :kind="kind" class="guide" @close="dismissGuide" />
+
       <p class="intro">
         歡迎你來到我們的婚禮<br />
         請留下你的名字<br />
@@ -109,6 +161,36 @@ async function enter() {
       </button>
 
       <p class="consent">進入後即代表同意分享你拍攝的回憶</p>
+
+      <button
+        v-if="!showCodeInput"
+        class="have-code"
+        type="button"
+        @click="showCodeInput = true"
+      >
+        已經加入過？輸入接續碼
+      </button>
+      <form v-else class="code-form" @submit.prevent="useTransferCode">
+        <p class="code-hint">在原本的裝置打開「我的」→ 右上角圖示，複製 8 碼接續碼貼在這裡</p>
+        <div class="code-row">
+          <input
+            v-model="transferCode"
+            class="code-input"
+            type="text"
+            inputmode="text"
+            autocapitalize="characters"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="12"
+            placeholder="例如 7Q2K9MPX"
+            aria-label="接續碼"
+          />
+          <button class="code-submit" type="submit" :disabled="!transferCode.trim() || claiming">
+            {{ claiming ? '…' : '繼續' }}
+          </button>
+        </div>
+        <p v-if="codeError" class="error" role="alert">{{ codeError }}</p>
+      </form>
     </div>
   </main>
 </template>
@@ -264,6 +346,72 @@ async function enter() {
   font-size: 11px;
   letter-spacing: 1px;
   color: var(--c-ink-mute);
+}
+
+.guide {
+  width: 100%;
+}
+
+.have-code {
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-ink-mute);
+  text-decoration: underline;
+}
+
+.code-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.code-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--c-ink-mute);
+}
+
+.code-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* 16px 以上 iOS 點進輸入框時才不會自動放大畫面 */
+.code-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--c-line);
+  border-radius: 12px;
+  background: var(--c-card);
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--c-ink);
+}
+
+.code-input:focus {
+  outline: none;
+  border-color: var(--c-rose-soft);
+}
+
+.code-submit {
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--c-ink);
+  color: #fff;
+  font-size: 13px;
+}
+
+.code-submit:disabled {
+  opacity: 0.45;
 }
 
 .error {
