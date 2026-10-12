@@ -87,18 +87,6 @@ function duration(seconds?: number | null) {
             共 {{ stats.photoCount }} 張回憶 · {{ stats.guestCount }} 位賓客
           </p>
         </div>
-        <button class="icon-btn" type="button" aria-label="搜尋">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="M16 16l5 5" />
-          </svg>
-        </button>
       </div>
 
       <div class="chips">
@@ -237,23 +225,7 @@ function duration(seconds?: number | null) {
   color: var(--c-ink-mute);
 }
 
-.icon-btn {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
-  background: var(--c-card);
-  border: 1px solid var(--c-line);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--c-ink);
-}
 
-.icon-btn svg {
-  width: 16px;
-  height: 16px;
-}
 
 .chips {
   margin-top: 18px;
