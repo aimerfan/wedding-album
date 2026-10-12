@@ -42,13 +42,14 @@ def create_app(overrides: dict | None = None) -> Flask:
     os.makedirs(app.instance_path, exist_ok=True)
     db.init_app(app)
 
-    from app import import_blessings, models, seed, storage  # noqa: F401  models：讓 create_all 知道有哪些資料表
+    from app import import_blessings, import_wedding, models, seed, storage  # noqa: F401  models：讓 create_all 知道有哪些資料表
     from app.api import bp
 
     app.register_blueprint(bp)
     app.register_blueprint(storage.bp)
     app.cli.add_command(seed.seed_command)
     app.cli.add_command(import_blessings.import_blessings_command)
+    app.cli.add_command(import_wedding.import_wedding_command)
 
     with app.app_context():
         # 只會建立還不存在的資料表，不會動到已有的資料。

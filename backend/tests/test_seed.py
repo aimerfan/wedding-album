@@ -1,6 +1,6 @@
 from app.db import db
-from app.models import Blessing, Guest, Like, Photo
-from app.seed import BLESSINGS, GUESTS, LIKES, PHOTOS
+from app.models import Blessing, Guest, Like, Photo, WeddingPhoto
+from app.seed import BLESSINGS, GUESTS, LIKES, PHOTOS, WEDDING
 
 # flask 指令執行前會依 FLASK_DEBUG 重設 app.debug，所以用環境變數模擬開發模式與否
 
@@ -16,6 +16,7 @@ def test_seed_creates_guests_and_photos(app, monkeypatch):
         assert db.session.query(Photo).count() == len(PHOTOS)
         assert db.session.query(Blessing).count() == len(BLESSINGS)
         assert db.session.query(Like).count() == len(LIKES)
+        assert db.session.query(WeddingPhoto).count() == len(WEDDING)
         # 掛在照片上的祝福，作者一定是那張照片的上傳者
         for b in db.session.query(Blessing).filter(Blessing.photo_id.is_not(None)):
             assert db.session.get(Photo, b.photo_id).uploader_id == b.guest_id

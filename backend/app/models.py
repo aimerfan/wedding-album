@@ -148,6 +148,34 @@ class Blessing(db.Model):
         }
 
 
+class WeddingPhoto(db.Model):
+    """婚紗照。新人自己的照片，僅供觀賞，所以不存原檔、沒有上傳者與讚。
+
+    用 flask import-wedding 匯入；顯示順序依檔名（見 app/import_wedding.py）。
+    """
+
+    __tablename__ = "wedding_photos"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default=lambda: _new_id("wp_"))
+    # 匯入時的檔名。重複匯入同一個資料夾時用來判斷哪些已經匯過
+    filename: Mapped[str] = mapped_column(String(255), unique=True)
+    # 顯示順序，0 在最前面
+    position: Mapped[int] = mapped_column(index=True)
+    width: Mapped[int]
+    height: Mapped[int]
+    display_key: Mapped[str] = mapped_column(String(128))
+    thumb_key: Mapped[str] = mapped_column(String(128))
+
+    def to_json(self) -> dict:
+        return {
+            "id": self.id,
+            "displayUrl": storage.url(self.display_key),
+            "thumbnailUrl": storage.url(self.thumb_key),
+            "width": self.width,
+            "height": self.height,
+        }
+
+
 def photos_to_json(photos: list[Photo], viewer_id: str | None) -> list[dict]:
     """照片轉成 JSON，順便算好讚數、我按過讚沒、我收藏了沒、附帶的祝福。
 

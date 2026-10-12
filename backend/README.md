@@ -26,6 +26,7 @@ pip install -r requirements-dev.txt
 | --- | --- |
 | `flask run` | 開發伺服器（http://localhost:5000），改程式會自動重啟 |
 | `flask seed` | 建立測試用的賓客、照片、祝福與讚，並印出兩組 token。加 `--reset` 會先清空所有資料。只能在開發模式執行 |
+| `flask import-wedding 資料夾` | 匯入婚紗照，見下方「匯入婚紗照」。加 `--replace` 先清掉舊的、`--dry-run` 只預覽 |
 | `flask import-blessings 檔案.csv` | 匯入婚禮前收到的祝福留言，見下方「預先匯入祝福」。加 `--dry-run` 只預覽不寫入 |
 | `pytest` | 跑全部測試 |
 
@@ -45,6 +46,7 @@ backend/
 │   ├── pagination.py  # 列表 API 共用的 cursor 分頁
 │   ├── seed.py        # flask seed 的測試資料
 │   ├── import_blessings.py  # flask import-blessings
+│   ├── import_wedding.py    # flask import-wedding
 │   └── api/           # 一類功能一個模組，都掛在 /api 底下
 ├── tests/
 ├── .flaskenv              # flask 指令的開發設定（只放可公開的內容）
@@ -71,6 +73,16 @@ backend/
 - 啟動時會自動建立還不存在的資料表，但**不會修改已存在的資料表**。
   改了 `app/models.py` 既有的欄位後，刪掉 `instance/wedding.db` 再啟動即可（開發資料會一起清掉）。
 - 正式上線前會加上 migration 工具，屆時改欄位就不必刪資料庫。
+
+## 匯入婚紗照
+
+新人的婚紗照（約 60 張）放在**同一個資料夾**，用 `flask import-wedding` 匯入。正式環境也能執行。
+
+- **顯示順序依檔名**，數字照大小排（`2.jpg` 在 `10.jpg` 前面）。建議命名成 `01.jpg`、`02.jpg`…
+- 只讀資料夾第一層的 JPEG、PNG、HEIC、WebP，其他檔案與子資料夾會略過。
+- 有任何一張讀不了，整批都不匯入，並列出是哪幾張。
+- 重複執行只會加入新的檔名；整批換掉請加 `--replace`。
+- **原檔不保存**：婚紗集僅供觀賞，只產生顯示用（1600px）與縮圖。新人手上本來就有原檔。
 
 ## 預先匯入祝福
 

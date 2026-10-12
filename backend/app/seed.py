@@ -15,7 +15,7 @@ from PIL import Image, ImageChops
 from app import images, storage
 from app.auth import new_token
 from app.db import db
-from app.models import Blessing, Guest, Like, Photo, now
+from app.models import Blessing, Guest, Like, Photo, WeddingPhoto, now
 
 # (暱稱, 與新人的關係)
 GUESTS = [
@@ -55,6 +55,9 @@ BLESSINGS = [
 
 # (按讚的人在 GUESTS 的位置, 第幾張照片)
 LIKES = [(0, 1), (2, 1), (3, 1), (5, 1), (0, 2), (4, 6), (6, 6)]
+
+# 婚紗集的測試照片 (寬, 高)。真的婚紗照用 flask import-wedding 匯入
+WEDDING = [(3, 2), (3, 4), (1, 1), (1, 1), (3, 2), (3, 4), (1, 1), (1, 1)]
 
 # 跟前端 PhotoTile 的佔位漸層同一組顏色
 GRADIENTS = [
@@ -155,10 +158,29 @@ def seed_command(reset: bool):
     for guest_index, photo_index in LIKES:
         db.session.add(Like(guest_id=guests[guest_index].id, photo_id=photos[photo_index].id))
 
+    for i, (w, h) in enumerate(WEDDING):
+        width, height = _size(w, h)
+        image = _gradient(width, height, GRADIENTS[(i + 3) % len(GRADIENTS)])
+        wedding = WeddingPhoto(
+            filename=f"{i + 1:02}.jpg",
+            position=i,
+            width=width,
+            height=height,
+            display_key="",
+            thumb_key="",
+        )
+        db.session.add(wedding)
+        db.session.flush()
+        wedding.display_key = f"wedding/{wedding.id}/display.jpg"
+        wedding.thumb_key = f"wedding/{wedding.id}/thumb.jpg"
+        storage.save(wedding.display_key, images.to_jpeg(image))
+        storage.save(wedding.thumb_key, images.make_thumbnail(image))
+
     db.session.commit()
 
     click.echo(
-        f"建立了 {len(guests)} 位賓客、{len(PHOTOS)} 張照片、{len(BLESSINGS)} 則祝福、{len(LIKES)} 個讚。"
+        f"建立了 {len(guests)} 位賓客、{len(PHOTOS)} 張照片、{len(BLESSINGS)} 則祝福、"
+        f"{len(LIKES)} 個讚、{len(WEDDING)} 張婚紗照。"
     )
     click.echo(f"照片檔在 {storage.media_dir()}")
     click.echo("")

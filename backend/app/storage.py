@@ -21,6 +21,13 @@ def save(key: str, data: bytes) -> None:
         f.write(data)
 
 
+def delete(key: str) -> None:
+    """刪掉一個檔案。檔案不在也不報錯：--replace 中斷後重跑，部分檔案可能已經刪過了。"""
+    path = os.path.join(media_dir(), *key.split("/"))
+    if os.path.exists(path):
+        os.remove(path)
+
+
 def url(key: str) -> str:
     """回給前端的網址，前端拿到後直接使用、不自己組。"""
     return current_app.config["MEDIA_BASE_URL"].rstrip("/") + "/" + key
