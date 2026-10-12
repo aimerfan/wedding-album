@@ -39,6 +39,13 @@ def test_wrong_admin_code(client, people):
     assert res.get_json()["error"]["code"] == "invalid_admin_code"
 
 
+def test_chinese_admin_code_is_rejected_not_500(client, people):
+    res = _make_admin(client, people["kai"], code="管理員")
+
+    assert res.status_code == 403
+    assert res.get_json()["error"]["code"] == "invalid_admin_code"
+
+
 def test_admin_is_not_exposed_publicly(client, people):
     _make_admin(client, people["admin"])
     blessing = client.post(

@@ -69,6 +69,9 @@ backend/
 ## 資料庫
 
 - 開發用的資料庫在 `instance/wedding.db`，照片檔在 `instance/media/`，都已被 git 忽略。
+- SQLite 開了 WAL 模式，`wedding.db` 旁邊會多出 `wedding.db-wal`、`wedding.db-shm`，三個檔是一組。
+  **備份時不要只複製 `wedding.db`**（最近寫入的資料可能還在 `-wal` 裡）：先停掉後端再複製三個檔，
+  或在執行中用 `sqlite3 wedding.db ".backup 備份檔.db"`。
 - 時間一律以**不帶時區的 UTC** 存進資料庫，回給前端時才轉成台灣時間（`+08:00`）。
 - 開發時照片檔由 Flask 的 `/media/...` 送出；正式環境改由網頁伺服器或雲端儲存直接提供。
 - 啟動時會自動建立還不存在的資料表，但**不會修改已存在的資料表**。

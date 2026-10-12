@@ -151,6 +151,24 @@ def test_not_an_image_is_415(client, token):
     assert res.get_json()["error"]["code"] == "unsupported_format"
 
 
+def _broken_heic(cut_image_data: bool) -> bytes:
+    data = make_image("HEIF")
+    mdat = data.find(b"mdat") + 4
+    if cut_image_data:
+        return data[: mdat + 16]  # 檔頭說有影像資料，檔案卻提早結束
+    return data[:mdat] + b"U" * (len(data) - mdat)  # 影像資料被寫壞
+
+
+@pytest.mark.parametrize("cut_image_data", [True, False])
+def test_broken_heic_is_415(client, token, cut_image_data):
+    # pillow-heif 這兩種情況丟的是 ValueError／EOFError，以前會變成 500
+    data = _broken_heic(cut_image_data)
+    res = upload(client, token, data, filename="IMG_0001.HEIC", mimetype="image/heic")
+
+    assert res.status_code == 415
+    assert res.get_json()["error"]["code"] == "unsupported_format"
+
+
 def test_image_with_fake_extension_is_checked_by_content(client, token):
     # 副檔名和 Content-Type 都可以亂填，一律看檔案內容判斷
     res = upload(client, token, b"not really a jpeg", filename="photo.jpg", mimetype="image/jpeg")

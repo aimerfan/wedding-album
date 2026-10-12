@@ -101,7 +101,8 @@ def process_upload(data: bytes) -> ProcessedImage:
         # 手機直拍的照片，像素其實是橫的，靠 EXIF 記錄要轉幾度。轉正之後尺寸才是對的
         upright = ImageOps.exif_transpose(image)
         upright.load()
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as e:
+    # 壞掉的 HEIC，pillow-heif 會依壞的地方丟 ValueError 或 EOFError，不是 OSError
+    except (UnidentifiedImageError, OSError, ValueError, EOFError, Image.DecompressionBombError) as e:
         raise UnsupportedImage(str(e)) from e
 
     return ProcessedImage(

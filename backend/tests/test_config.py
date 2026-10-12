@@ -34,3 +34,17 @@ def test_unknown_api_returns_error_shape(client):
 
     assert res.status_code == 404
     assert res.get_json() == {"error": {"code": "not_found", "message": "找不到這個東西"}}
+
+
+def test_sqlite_uses_wal_and_waits_for_locks(tmp_path):
+    # 婚宴高峰多人同時上傳：寫入時別人還能讀，兩個寫入撞在一起時後到的會等，而不是直接失敗
+    from sqlalchemy import text
+
+    from app.db import BUSY_TIMEOUT_MS, db
+
+    app = create_app(
+        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'wal.db'}"}
+    )
+    with app.app_context():
+        assert db.session.execute(text("PRAGMA journal_mode")).scalar() == "wal"
+        assert db.session.execute(text("PRAGMA busy_timeout")).scalar() == BUSY_TIMEOUT_MS

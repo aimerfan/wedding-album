@@ -181,8 +181,8 @@ def become_admin():
     if not expected:
         raise ApiError(403, "admin_disabled", "這個相簿沒有開放管理員")
     code = _json_body().get("adminCode")
-    # 用 compare_digest 比對，避免從回應時間猜出代碼
-    if not isinstance(code, str) or not hmac.compare_digest(code, expected):
+    # 用 compare_digest 比對，避免從回應時間猜出代碼；先轉 bytes，含中文的 str 它不收
+    if not isinstance(code, str) or not hmac.compare_digest(code.encode(), expected.encode()):
         raise ApiError(403, "invalid_admin_code", "管理員代碼不正確")
     g.guest.is_admin = True
     db.session.commit()

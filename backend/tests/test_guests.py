@@ -41,6 +41,37 @@ def test_wrong_event_code_is_rejected(client):
     assert res.get_json()["error"]["code"] == "invalid_event_code"
 
 
+# compare_digest 遇到含中文的 str 會丟例外，以前這些情況會變成 500
+
+
+@pytest.fixture
+def chinese_code_client():
+    app = create_app(
+        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "EVENT_CODE": "鴻婷1017"}
+    )
+    return app.test_client()
+
+
+def test_chinese_event_code(chinese_code_client):
+    res = chinese_code_client.post("/api/guests", json={"eventCode": "鴻婷1017", "nickname": "小婷"})
+    assert res.status_code == 201
+
+
+@pytest.mark.parametrize("sent", ["鴻婷", "鴻婷1017x", "dev"])
+def test_wrong_code_against_chinese_event_code(chinese_code_client, sent):
+    res = chinese_code_client.post("/api/guests", json={"eventCode": sent, "nickname": "小婷"})
+
+    assert res.status_code == 401
+    assert res.get_json()["error"]["code"] == "invalid_event_code"
+
+
+def test_chinese_code_against_ascii_event_code(client):
+    res = client.post("/api/guests", json={"eventCode": "鴻婷", "nickname": "小慧"})
+
+    assert res.status_code == 401
+    assert res.get_json()["error"]["code"] == "invalid_event_code"
+
+
 def test_missing_event_code_is_rejected(client):
     res = client.post("/api/guests", json={"nickname": "小慧"})
     assert res.status_code == 401

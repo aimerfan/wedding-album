@@ -30,9 +30,10 @@ def hash_token(token: str) -> str:
 
 
 def check_event_code(code: object) -> None:
-    """活動碼不對就擋下來。用 compare_digest 比對，避免從回應時間猜出活動碼。"""
+    """活動碼不對就擋下來。用 compare_digest 比對，避免從回應時間猜出活動碼。
+    比對前先轉成 bytes：compare_digest 遇到含中文的 str 會直接丟例外。"""
     expected = current_app.config["EVENT_CODE"]
-    if not isinstance(code, str) or not hmac.compare_digest(code, expected):
+    if not isinstance(code, str) or not hmac.compare_digest(code.encode(), expected.encode()):
         raise ApiError(401, "invalid_event_code", "活動碼不正確，請重新掃描會場的 QR code")
 
 
