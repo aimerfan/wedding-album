@@ -119,9 +119,13 @@ async function enter() {
   color: var(--c-ink);
 }
 
+/*
+ * 大圖跟著螢幕高度縮：螢幕矮或還有瀏覽器網址列時，「進入相簿」才不會被擠到畫面外。
+ * 最高 380px（設計稿），最矮 220px（名字以上至少留一點圖）
+ */
 .hero {
   position: relative;
-  height: 380px;
+  height: clamp(220px, 100dvh - 470px, 380px);
   overflow: hidden;
 }
 

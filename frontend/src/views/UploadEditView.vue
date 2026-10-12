@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { createBlessing } from '@/api/blessings'
 import { ApiError } from '@/api/client'
@@ -34,6 +34,29 @@ const nickname = computed(() => session.nickname || '賓客')
 const initial = computed(() => nickname.value[0] ?? '賓')
 
 const blessingLength = computed(() => uploadFlow.draft.blessing.length)
+
+// --- 祝福輸入框下方的符號 -------------------------------------------------
+
+const MARKS = ['♥', '♡', '✿']
+const blessingEl = ref<HTMLTextAreaElement>()
+
+/** 插在游標的位置（有選取文字就取代），而不是一律加在最後；插完游標停在符號後面 */
+async function insertMark(mark: string) {
+  const el = blessingEl.value
+  const text = uploadFlow.draft.blessing
+  // 還沒點過輸入框時沒有游標，就加在最後
+  const start = el?.selectionStart ?? text.length
+  const end = el?.selectionEnd ?? text.length
+  const next = text.slice(0, start) + mark + text.slice(end)
+  if (next.length > albumConfig.maxBlessingLength) return
+
+  uploadFlow.draft.blessing = next
+  await nextTick()
+  if (el) {
+    el.focus()
+    el.setSelectionRange(start + mark.length, start + mark.length)
+  }
+}
 
 onMounted(() => {
   // 直接開這個網址（重新整理、分享連結）時沒有選到的檔案，退回第一步
@@ -250,6 +273,7 @@ onBeforeRouteLeave(() => {
         </div>
 
         <textarea
+          ref="blessingEl"
           v-model="uploadFlow.draft.blessing"
           class="blessing"
           :maxlength="albumConfig.maxBlessingLength"
@@ -258,10 +282,17 @@ onBeforeRouteLeave(() => {
         />
 
         <div class="card-foot">
+          <!-- mousedown.prevent：按符號時輸入框不會失焦，游標位置與手機鍵盤都留著 -->
           <div class="marks">
-            <button type="button" @click="uploadFlow.draft.blessing += '♥'">♥</button>
-            <button type="button" @click="uploadFlow.draft.blessing += '♡'">♡</button>
-            <button type="button" @click="uploadFlow.draft.blessing += '✿'">✿</button>
+            <button
+              v-for="m in MARKS"
+              :key="m"
+              type="button"
+              @mousedown.prevent
+              @click="insertMark(m)"
+            >
+              {{ m }}
+            </button>
           </div>
           <span class="counter">{{ blessingLength }} / {{ albumConfig.maxBlessingLength }}</span>
         </div>
