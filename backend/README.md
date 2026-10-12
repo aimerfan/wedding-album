@@ -59,6 +59,7 @@ backend/
 | 名稱 | 預設 | 說明 |
 | --- | --- | --- |
 | `EVENT_CODE` | 開發時為 `dev` | QR code 網址裡的活動碼。**沒設又不是開發模式就拒絕啟動** |
+| `ADMIN_CODE` | 開發時為 `admin` | 開通管理員的代碼（`/admin?code=…`）。正式環境沒設就沒有管理員，不影響賓客使用 |
 | `DATABASE_URL` | `sqlite:///wedding.db` | 相對路徑放在 `instance/` 底下 |
 | `MEDIA_DIR` | `instance/media/` | 照片檔存放的資料夾 |
 | `MEDIA_BASE_URL` | `/media` | 回給前端的照片網址開頭。換成雲端儲存時改成 CDN 網址 |

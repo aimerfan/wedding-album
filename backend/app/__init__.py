@@ -12,6 +12,7 @@ from app import config, errors
 from app.db import db
 
 DEV_EVENT_CODE = "dev"
+DEV_ADMIN_CODE = "admin"
 
 
 def create_app(overrides: dict | None = None) -> Flask:
@@ -28,6 +29,10 @@ def create_app(overrides: dict | None = None) -> Flask:
                 "開發時請在 backend/ 底下執行 flask 指令（會讀 .flaskenv 進入開發模式）"
             )
         app.config["EVENT_CODE"] = DEV_EVENT_CODE
+
+    # 管理員代碼沒設：開發時用預設值方便測試；正式環境就保持空的（管理員功能關閉，不影響賓客使用）
+    if not app.config["ADMIN_CODE"] and (app.debug or app.testing):
+        app.config["ADMIN_CODE"] = DEV_ADMIN_CODE
 
     # 整個請求的大小上限 = 單張照片上限（預設 30 MB）+ 1 MB 給表單的其他欄位（例如 tag）。
     # 超過這個大小的請求，Flask 在讀進記憶體之前就直接回 413，

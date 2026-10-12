@@ -182,6 +182,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | `GET` | `/api/me` | ✓ | 目前這位賓客的資料與統計 |
 | `PATCH` | `/api/me` | ✓ | 改暱稱或與新人的關係 |
 | `POST` | `/api/me/transfer-codes` | ✓ | 產生接續連結 |
+| `POST` | `/api/me/admin` | ✓ | 用管理員代碼把自己開通成管理員 |
 
 前兩支是「領 token」的 API。這時賓客手上還沒有 token，所以這兩支不檢查 token，
 改用活動碼或接續碼確認對方有資格進來。
@@ -249,9 +250,33 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 ```json
 {
   "guest": { "id": "g_1", "nickname": "小慧", "relation": "新娘的大學同學" },
+  "isAdmin": false,
   "stats": { "uploaded": 12, "favorited": 8, "likesReceived": 24, "blessings": 1 }
 }
 ```
+
+`isAdmin` 只回給本人，不會出現在別人看到的 Guest 資料裡。
+
+`POST /api/me/admin`
+
+```json
+// 請求
+{ "adminCode": "…" }
+
+// 回應 200
+{ "guest": { ... }, "isAdmin": true }
+```
+
+**管理員**可以刪除任何照片與任何祝福（包括預先匯入的），用來處理不適當的內容。不能修改別人的祝福內容。
+
+- 怎麼成為管理員：先照一般流程加入相簿，再打開 `https://<網站>/admin?code=<管理員代碼>`。
+  代碼由後端環境變數 `ADMIN_CODE` 設定，可以交給一兩位信任的朋友，婚禮當天新人不必自己處理。
+- 沒設 `ADMIN_CODE` 時管理員功能關閉，不影響賓客使用（開發模式預設為 `admin`）。
+
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `invalid_admin_code` | `403` | 代碼不正確 |
+| `admin_disabled` | `403` | 後端沒設 `ADMIN_CODE` |
 
 ### 相簿
 
@@ -261,7 +286,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | `GET` | `/api/photos` | 照片列表（分頁） |
 | `GET` | `/api/photos/{id}` | 單張照片 |
 | `POST` | `/api/photos` | 上傳一個檔案 |
-| `DELETE` | `/api/photos/{id}` | 刪除自己上傳的照片 |
+| `DELETE` | `/api/photos/{id}` | 刪除照片：上傳者刪自己的，管理員可刪任何一張。回 `204` |
 | `PUT` | `/api/photos/{id}/like` | 按讚 |
 | `DELETE` | `/api/photos/{id}/like` | 收回讚 |
 | `PUT` | `/api/photos/{id}/favorite` | 收藏 |
@@ -292,6 +317,9 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 排序固定是上傳時間新到舊。
 
 按讚、收藏用 `PUT` / `DELETE`：重複按不會出錯，網路不穩重送也安全。回應是更新後的 Photo。
+
+**刪除照片**時，照片檔、讚、收藏一併刪掉。照片上附的祝福會**留在留言牆**，只是 `photoId` 變成 `null`：
+照片不當不代表祝福也有問題。不是上傳者也不是管理員時回 `403`、`code` 為 `not_your_photo`。
 
 ### 上傳
 
@@ -368,7 +396,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | `GET` | `/api/blessings` | 留言牆（分頁）；`guest=me` 只列自己的 |
 | `POST` | `/api/blessings` | 留下祝福 |
 | `PATCH` | `/api/blessings/{id}` | 修改自己的祝福，只能改 `text` |
-| `DELETE` | `/api/blessings/{id}` | 刪除自己的祝福，回 `204` |
+| `DELETE` | `/api/blessings/{id}` | 刪除自己的祝福；管理員可刪任何一則。回 `204` |
 
 `POST /api/blessings`
 
@@ -414,11 +442,8 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 下面這些會影響 API 的樣子，定案後更新本文件：
 
-1. **要不要有「管理員」刪照片？** 活動碼外流時，陌生人傳的不當照片會出現在所有賓客眼前。
-   建議的最小做法：後端產生一條管理員連結，打開的人就有權刪除任何照片。
-   婚禮當天新人很忙，這條連結可以交給一位信任的朋友（或開發者自己）代管。
-2. **相簿開放期間。** 預計開放兩週到一個月。截止後要改成「只能看不能傳」（`uploadsOpen: false`），還是整站關閉？
-3. **正式環境前後端是不是同一個網域？** 前端放 Cloudflare Pages、後端放別處的話，後端要開 CORS。
+1. **相簿開放期間。** 預計開放兩週到一個月。截止後要改成「只能看不能傳」（`uploadsOpen: false`），還是整站關閉？
+2. **正式環境前後端是不是同一個網域？** 前端放 Cloudflare Pages、後端放別處的話，後端要開 CORS。
 
 ## 已決定不做
 

@@ -47,6 +47,8 @@ class Guest(db.Model):
     relation: Mapped[str | None] = mapped_column(String(RELATION_MAX))
     # 預先匯入的祝福作者：不是透過 app 加入的，沒有 token、不能登入，只是掛名在祝福上
     imported: Mapped[bool] = mapped_column(default=False)
+    # 管理員可以刪除任何照片與祝福。用管理員代碼開通（POST /api/me/admin）
+    is_admin: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
     def to_json(self) -> dict:

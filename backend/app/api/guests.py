@@ -1,5 +1,6 @@
 """身分相關：加入相簿、目前這位賓客的資料、換裝置的接續碼。"""
 
+import hmac
 import secrets
 from datetime import timedelta
 
@@ -80,6 +81,8 @@ def get_me():
     return jsonify(
         {
             "guest": g.guest.to_json(),
+            # 只回給本人，不放進公開的 Guest 資料
+            "isAdmin": g.guest.is_admin,
             "stats": {
                 "uploaded": count(
                     db.select(func.count()).select_from(Photo).where(Photo.uploader_id == me)
@@ -165,3 +168,22 @@ def claim_transfer_code():
     token = issue_token(guest)
     db.session.commit()
     return jsonify({"token": token, "guest": guest.to_json()})
+
+
+# --- 管理員 ---------------------------------------------------------------
+
+
+@bp.post("/me/admin")
+@require_guest
+def become_admin():
+    """用管理員代碼把自己開通成管理員。先照一般流程加入相簿，再打開 /admin?code=…"""
+    expected = current_app.config["ADMIN_CODE"]
+    if not expected:
+        raise ApiError(403, "admin_disabled", "這個相簿沒有開放管理員")
+    code = _json_body().get("adminCode")
+    # 用 compare_digest 比對，避免從回應時間猜出代碼
+    if not isinstance(code, str) or not hmac.compare_digest(code, expected):
+        raise ApiError(403, "invalid_admin_code", "管理員代碼不正確")
+    g.guest.is_admin = True
+    db.session.commit()
+    return jsonify({"guest": g.guest.to_json(), "isAdmin": True})

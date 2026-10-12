@@ -147,6 +147,31 @@ def get_photo(photo_id: str):
     return jsonify(_get_photo_or_404(photo_id).to_json(g.guest.id))
 
 
+@bp.delete("/photos/<photo_id>")
+@require_guest
+def delete_photo(photo_id: str):
+    """刪除照片。上傳者可以刪自己的；管理員可以刪任何一張（例如不適當的照片）。
+
+    讚、收藏一併刪掉。照片上的祝福留在留言牆，只是不再掛在照片上：照片不當不代表祝福也有問題。
+    """
+    photo = _get_photo_or_404(photo_id)
+    if photo.uploader_id != g.guest.id and not g.guest.is_admin:
+        raise ApiError(403, "not_your_photo", "只能刪除自己上傳的照片")
+
+    keys = [photo.original_key, photo.display_key, photo.thumb_key]
+    db.session.execute(db.delete(Like).where(Like.photo_id == photo.id))
+    db.session.execute(db.delete(Favorite).where(Favorite.photo_id == photo.id))
+    db.session.execute(
+        db.update(Blessing).where(Blessing.photo_id == photo.id).values(photo_id=None)
+    )
+    db.session.delete(photo)
+    db.session.commit()
+    # 資料庫刪成功之後才刪檔案；反過來的話，萬一資料庫失敗會留下一張打不開的照片
+    for key in keys:
+        storage.delete(key)
+    return "", 204
+
+
 # --- 按讚、收藏 -----------------------------------------------------------
 # 用 PUT / DELETE 而不是「切換」：重複按、網路不穩重送，結果都一樣，不會讚了又被收回。
 # 回應是更新後的照片，前端直接拿來換掉畫面上的那張。

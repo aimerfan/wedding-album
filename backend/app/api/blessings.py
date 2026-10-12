@@ -27,12 +27,15 @@ def _clean_text(raw: object) -> str:
     return text
 
 
-def _my_blessing(blessing_id: str) -> Blessing:
-    """只能改、刪自己的祝福。預先匯入的祝福作者沒有 token，所以自然沒人能改。"""
+def _my_blessing(blessing_id: str, allow_admin: bool = False) -> Blessing:
+    """只能改、刪自己的祝福；allow_admin 時管理員也可以（刪除用，管理員不能改別人的內容）。
+
+    預先匯入的祝福作者不能登入，所以只有管理員能刪那些祝福。
+    """
     blessing = db.session.get(Blessing, blessing_id)
     if blessing is None:
         raise ApiError(404, "blessing_not_found", "找不到這則祝福")
-    if blessing.guest_id != g.guest.id:
+    if blessing.guest_id != g.guest.id and not (allow_admin and g.guest.is_admin):
         raise ApiError(403, "not_your_blessing", "只能修改自己的祝福")
     return blessing
 
@@ -86,6 +89,6 @@ def update_blessing(blessing_id: str):
 @bp.delete("/blessings/<blessing_id>")
 @require_guest
 def delete_blessing(blessing_id: str):
-    db.session.delete(_my_blessing(blessing_id))
+    db.session.delete(_my_blessing(blessing_id, allow_admin=True))
     db.session.commit()
     return "", 204

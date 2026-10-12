@@ -28,6 +28,8 @@ def load() -> dict:
         "SQLALCHEMY_DATABASE_URI": os.environ.get("DATABASE_URL", "sqlite:///wedding.db"),
         # QR code 網址裡的活動碼。正式環境一定要設；開發與測試時沒設就用 "dev"
         "EVENT_CODE": os.environ.get("EVENT_CODE", ""),
+        # 開通管理員用的代碼。正式環境沒設就沒有人能成為管理員；開發與測試時沒設就用 "admin"
+        "ADMIN_CODE": os.environ.get("ADMIN_CODE", ""),
         # 照片檔放哪裡。空字串代表 backend/instance/media/
         "MEDIA_DIR": os.environ.get("MEDIA_DIR", ""),
         # 回給前端的照片網址開頭。換成雲端儲存時改成 CDN 網址即可，前端不用動
