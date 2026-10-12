@@ -65,15 +65,20 @@ export interface Blessing {
   photoId?: PhotoId | null
 }
 
-/** 婚紗集的一個系列，例如「陽明山外景」。僅供觀賞，不開放下載。 */
-export interface WeddingCollection {
+/**
+ * 婚紗照。新人自己的照片，婚紗集不分系列，就是一串。
+ * 僅供觀賞：只有顯示用與縮圖，沒有原檔網址、上傳者與讚。
+ */
+export interface WeddingPhoto {
   id: string
-  title: string
-  /** 例如「陽明山 · 2026 春末 · 共 24 張」 */
-  caption?: string
-  coverUrl: string
-  photos: Photo[]
+  displayUrl: string
+  thumbnailUrl: string
+  width: number
+  height: number
 }
+
+/** PhotoTile 顯示一張圖需要的欄位，賓客照片與婚紗照都符合 */
+export type TileImage = Pick<Photo, 'displayUrl' | 'thumbnailUrl'> & { blessing?: string | null }
 
 /** 首頁頂部的統計數字 */
 export interface AlbumStats {

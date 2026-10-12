@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import PhotoTile from '@/components/PhotoTile.vue'
-import type { Photo } from '@/types/album'
+import type { TileImage } from '@/types/album'
 
 export interface SwiperSlide {
   key: string
   /** 寬 / 高 */
   ratio: number
-  photo?: Photo
+  photo?: TileImage
   /** 沒有 photo 時給 PhotoTile 挑漸層色 */
   index?: number
 }

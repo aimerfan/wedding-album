@@ -1,23 +1,55 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { ApiError } from '@/api/client'
+import { fetchWeddingPhotos } from '@/api/wedding'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
-import { weddingCollections } from '@/mock/sample'
+import type { WeddingPhoto } from '@/types/album'
 
-/** 婚紗集是新人自己的照片，僅供觀賞，不提供下載 */
-const activeCollection = ref(weddingCollections[0]?.id ?? '')
+/** 婚紗集是新人自己的照片，僅供觀賞，不提供下載。一串，不分系列 */
+const photos = ref<WeddingPhoto[]>([])
+const loaded = ref(false)
+const error = ref('')
+
+async function load() {
+  error.value = ''
+  try {
+    photos.value = (await fetchWeddingPhotos()).items
+    loaded.value = true
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : '載入失敗，請稍後再試'
+  }
+}
+
+onMounted(load)
+
+/** 封面用第一張 */
+const cover = computed(() => photos.value[0])
+
+/**
+ * 雜誌式排版：每 4 張一組，「一張橫幅大圖 + 一張直幅 + 兩張方圖」，一路重複排下去。
+ * 照片會裁切成格子的比例；點開放大時才看得到完整的照片。
+ */
+const groups = computed(() => {
+  const result: { start: number; items: WeddingPhoto[] }[] = []
+  for (let i = 0; i < photos.value.length; i += 4) {
+    result.push({ start: i, items: photos.value.slice(i, i + 4) })
+  }
+  return result
+})
+
+/** 01、02… 壓在照片角落的編號 */
+function plate(i: number) {
+  return String(i + 1).padStart(2, '0')
+}
+
+const slides = computed(() =>
+  photos.value.map((p) => ({ key: p.id, photo: p, ratio: p.width / p.height })),
+)
 
 const route = useRoute()
 const router = useRouter()
-
-// 雜誌排版裡的四張，依閱讀順序。真的照片接上後改成 collection.photos
-const spread = [
-  { key: '01', index: 3, ratio: 3 / 2 },
-  { key: '02', index: 5, ratio: 3 / 4 },
-  { key: '03', index: 6, ratio: 1 },
-  { key: '04', index: 7, ratio: 1 },
-]
 
 /**
  * 放大檢視記在網址上（?photo=2），手機的返回鍵／返回手勢才會先關掉檢視，
@@ -25,7 +57,7 @@ const spread = [
  */
 const viewing = computed(() => {
   const n = Number(route.query.photo)
-  return Number.isInteger(n) && n >= 1 && n <= spread.length ? n - 1 : null
+  return Number.isInteger(n) && n >= 1 && n <= photos.value.length ? n - 1 : null
 })
 
 const current = computed({
@@ -51,7 +83,7 @@ function close() {
 <template>
   <main class="gallery">
     <section class="hero">
-      <PhotoTile :index="2" ratio="auto" class="hero-photo" />
+      <PhotoTile :photo="cover" full :index="2" ratio="auto" class="hero-photo" />
       <div class="hero-scrim" />
 
       <div class="hero-bar">
@@ -62,44 +94,65 @@ function close() {
       <div class="hero-text">
         <p class="kicker">OUR PRE-WEDDING</p>
         <h1>婚 紗 集</h1>
-        <p class="caption">{{ weddingCollections[0]?.caption }}</p>
+        <p v-if="photos.length" class="caption">共 {{ photos.length }} 張</p>
       </div>
     </section>
 
-    <div class="chips">
-      <button
-        v-for="c in weddingCollections"
-        :key="c.id"
-        type="button"
-        class="chip"
-        :class="{ active: activeCollection === c.id }"
-        @click="activeCollection = c.id"
-      >
-        {{ c.title }}
-      </button>
-    </div>
-
-    <!-- 雜誌式排版：一張大圖 + 一直一橫的組合 -->
+    <!-- 雜誌式排版：每 4 張一組重複，一張橫幅 + 一直一方一方 -->
     <div class="spread">
-      <button class="frame wide" type="button" aria-label="放大第 1 張" @click="open(0)">
-        <PhotoTile :index="3" ratio="3/2" />
-        <span class="plate">01 · Hill Path</span>
-      </button>
-
-      <div class="pair">
-        <button class="frame tall" type="button" aria-label="放大第 2 張" @click="open(1)">
-          <PhotoTile :index="5" ratio="auto" label="02 · Wildflowers" class="fill" />
+      <template v-for="g in groups" :key="g.start">
+        <button
+          class="frame wide"
+          type="button"
+          :aria-label="`放大第 ${g.start + 1} 張`"
+          @click="open(g.start)"
+        >
+          <PhotoTile :photo="g.items[0]" ratio="3/2" />
+          <span class="plate">{{ plate(g.start) }}</span>
         </button>
-        <div class="stack">
-          <button class="frame" type="button" aria-label="放大第 3 張" @click="open(2)">
-            <PhotoTile :index="6" ratio="1/1" label="03" />
+
+        <!-- 最後一組只剩 2 張時，直幅旁邊沒有方圖撐高度，第 2 張也用橫幅 -->
+        <button
+          v-if="g.items.length === 2"
+          class="frame wide"
+          type="button"
+          :aria-label="`放大第 ${g.start + 2} 張`"
+          @click="open(g.start + 1)"
+        >
+          <PhotoTile :photo="g.items[1]" ratio="3/2" />
+          <span class="plate">{{ plate(g.start + 1) }}</span>
+        </button>
+
+        <div v-else-if="g.items.length > 2" class="pair">
+          <button
+            class="frame tall"
+            type="button"
+            :aria-label="`放大第 ${g.start + 2} 張`"
+            @click="open(g.start + 1)"
+          >
+            <PhotoTile :photo="g.items[1]" ratio="auto" :label="plate(g.start + 1)" class="fill" />
           </button>
-          <button class="frame" type="button" aria-label="放大第 4 張" @click="open(3)">
-            <PhotoTile :index="7" ratio="1/1" label="04" />
-          </button>
+          <div class="stack">
+            <button
+              v-for="(p, k) in g.items.slice(2)"
+              :key="p.id"
+              class="frame"
+              type="button"
+              :aria-label="`放大第 ${g.start + 3 + k} 張`"
+              @click="open(g.start + 2 + k)"
+            >
+              <PhotoTile :photo="p" ratio="1/1" :label="plate(g.start + 2 + k)" />
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
+
+    <p v-if="error" class="status">
+      {{ error }}
+      <button class="retry" type="button" @click="load">重試</button>
+    </p>
+    <p v-else-if="loaded && photos.length === 0" class="status">婚紗照即將上架，敬請期待</p>
 
     <Transition name="fade">
       <!-- 長按選單會出現「儲存影像」，婚紗集不開放下載，一併擋掉 -->
@@ -116,12 +169,12 @@ function close() {
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
-          <span class="viewer-counter">{{ current + 1 }} / {{ spread.length }}</span>
+          <span class="viewer-counter">{{ current + 1 }} / {{ photos.length }}</span>
           <span class="round-spacer" />
         </header>
 
         <div class="viewer-stage">
-          <PhotoSwiper v-model="current" :slides="spread" />
+          <PhotoSwiper v-model="current" :slides="slides" />
         </div>
       </div>
     </Transition>
@@ -215,38 +268,25 @@ function close() {
   opacity: 0.7;
 }
 
-.chips {
-  display: flex;
-  gap: 8px;
-  padding: 20px 16px 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.chips::-webkit-scrollbar {
-  display: none;
-}
-
-.chip {
-  flex-shrink: 0;
-  padding: 7px 14px;
-  border-radius: 14px;
-  border: 1px solid var(--c-dark-line);
-  background: transparent;
+.status {
+  margin: 32px 16px;
+  text-align: center;
+  font-size: 13px;
   color: var(--c-dark-ink-mute);
-  font-size: 11px;
-  letter-spacing: 1px;
-  white-space: nowrap;
 }
 
-.chip.active {
-  background: #fff;
-  border-color: transparent;
-  color: var(--c-ink);
+.retry {
+  margin-left: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--c-dark-line);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-dark-ink);
 }
 
 .spread {
-  padding: 0 16px 16px;
+  padding: 20px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;

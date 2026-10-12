@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Photo } from '@/types/album'
+import type { TileImage } from '@/types/album'
 
 /**
  * 相片格。漸層佔位圖墊在底下：沒有圖檔時直接顯示它，有圖檔時在載入完成前先看到它。
  */
 const props = withDefaults(
   defineProps<{
-    photo?: Photo
+    photo?: TileImage
     /** 沒有 photo 時用來挑漸層色 */
     index?: number
     /** CSS aspect-ratio，例如 '4/5'；'auto' 表示由外層控制高度 */
