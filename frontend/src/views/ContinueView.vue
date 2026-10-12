@@ -67,7 +67,11 @@ onMounted(() => {
 
     <template v-else>
       <p class="text error" role="alert">{{ error }}</p>
-      <button class="secondary" type="button" @click="router.replace({ name: 'welcome' })">
+      <!-- 已經是某位賓客：連結失敗也不影響原本的身分，直接回相簿 -->
+      <button v-if="session.token" class="secondary" type="button" @click="keepCurrent">
+        回相簿
+      </button>
+      <button v-else class="secondary" type="button" @click="router.replace({ name: 'welcome' })">
         改用新身分加入
       </button>
     </template>

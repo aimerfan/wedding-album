@@ -38,7 +38,9 @@ export function setUnauthorizedHandler(handler: () => void) {
  */
 export function toApiError(status: number, data: unknown): ApiError {
   const error = (data as { error?: { code?: string; message?: string } } | null)?.error
-  if (status === 401 && session.token) onUnauthorized()
+  // 只有 token 本身失效（unauthorized）才清掉身分；接續碼、活動碼錯誤也是 401，
+  // 但那時手上的 token 還是好的，不能因此把人登出
+  if (status === 401 && session.token && error?.code === 'unauthorized') onUnauthorized()
   // 502/503/504 又沒有後端的錯誤內容：請求根本沒到 Flask（後端沒開、正在重啟、主機掛了）
   if (!error && status >= 502 && status <= 504) {
     return new ApiError(status, 'server_unavailable', '暫時連不上伺服器，請稍後再試')
