@@ -36,11 +36,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // 正式環境前後端同網域：直接打開 API 或照片網址時，要交給後端，不能被換成前端頁面
+        navigateFallbackDenylist: [/^\/api\//, /^\/media\//],
         // 相片走執行期快取，不進 precache（precache 會在安裝時全部下載）
         runtimeCaching: [
           {
-            // TODO: 後端 API 定案後，把 urlPattern 換成實際的縮圖網域／路徑
-            urlPattern: ({ request }) => request.destination === 'image',
+            // 只快取縮圖與顯示圖（後端固定命名成 thumb.jpg／display.jpg）。
+            // 原檔動輒數 MB，存進來很快就把手機的快取空間吃光
+            urlPattern: ({ url }) => /\/(thumb|display)\.jpg$/.test(url.pathname),
             handler: 'CacheFirst',
             options: {
               cacheName: 'photo-cache',
