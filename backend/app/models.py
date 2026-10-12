@@ -173,6 +173,16 @@ class Blessing(db.Model):
         }
 
 
+class Setting(db.Model):
+    """管理員在 app 裡就能改的設定（例如 Kahoot! 連結），不必改環境變數、重啟後端。"""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(1000))
+    updated_at: Mapped[datetime] = mapped_column(default=now, onupdate=now)
+
+
 class WeddingPhoto(db.Model):
     """婚紗照。新人自己的照片，僅供觀賞，所以不存原檔、沒有上傳者與讚。
 

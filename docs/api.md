@@ -370,7 +370,8 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 | 方法 | 路徑 | 需要 token | 用途 |
 | --- | --- | --- | --- |
-| `GET` | `/api/config` | ✗ | 前端要遵守的各種上限 |
+| `GET` | `/api/config` | ✗ | 前端要遵守的各種上限，以及管理員設定的 Kahoot! 連結 |
+| `PUT` | `/api/settings/kahoot` | ✓（管理員） | 設定或拿掉 Kahoot! 連結 |
 
 ```json
 {
@@ -379,7 +380,8 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
   "maxUploadsPerHour": 300,
   "uploadConcurrency": 3,
   "maxBlessingLength": 200,
-  "uploadsOpen": true
+  "uploadsOpen": true,
+  "kahootUrl": "https://kahoot.it/?pin=1234567"
 }
 ```
 
@@ -388,6 +390,24 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 不必重新部署前端，賓客重新整理頁面就會套用。
 
 `uploadsOpen` 為 `false` 時代表相簿已截止上傳，前端隱藏上傳按鈕，`POST /api/photos` 回 `403`。
+
+**Kahoot! 連結**：遊戲的 PIN 碼要到主持人開始遊戲時才知道，所以不寫在前端、也不放環境變數，
+由**管理員在 app 裡設定**，所有人（包括還沒加入的歡迎頁）透過 `kahootUrl` 拿到。沒設定時是 `null`，前端不顯示按鈕。
+
+`PUT /api/settings/kahoot`
+
+```json
+// 請求：url 傳空字串或 null 代表拿掉
+{ "url": "https://kahoot.it/?pin=1234567" }
+
+// 回應 200
+{ "kahootUrl": "https://kahoot.it/?pin=1234567" }
+```
+
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `invalid_url` | `400` | 不是 `http://` 或 `https://` 開頭的網址，或超過 500 字 |
+| `not_admin` | `403` | 不是管理員 |
 
 ### 祝福
 

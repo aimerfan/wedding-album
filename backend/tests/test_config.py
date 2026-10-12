@@ -13,6 +13,7 @@ def test_config_returns_limits(client):
         "uploadConcurrency": 3,
         "maxBlessingLength": 200,
         "uploadsOpen": True,
+        "kahootUrl": None,
     }
 
 
