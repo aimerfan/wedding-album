@@ -1,5 +1,5 @@
 from app.db import db
-from app.models import Blessing, Guest
+from app.models import AuthToken, Blessing, Guest
 from tests.conftest import auth
 
 
@@ -63,7 +63,8 @@ def test_imported_authors_cannot_log_in_and_are_not_counted_as_guests(app, clien
     assert stats["blessingGuestCount"] == 1  # 阿凱留了祝福
     with app.app_context():
         author = db.session.scalar(db.select(Guest).where(Guest.nickname == "阿凱"))
-        assert author.token_hash is None
+        assert author.imported is True
+        assert db.session.query(AuthToken).filter_by(guest_id=author.id).count() == 0
 
 
 def test_same_name_joining_later_is_a_different_guest(app, client, join, tmp_path):

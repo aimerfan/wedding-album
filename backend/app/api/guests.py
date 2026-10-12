@@ -1,13 +1,27 @@
-"""身分相關：加入相簿、目前這位賓客的資料。"""
+"""身分相關：加入相簿、目前這位賓客的資料、換裝置的接續碼。"""
 
-from flask import g, jsonify, request
+import secrets
+from datetime import timedelta
+
+from flask import current_app, g, jsonify, request
 from sqlalchemy import func
 
 from app.api import bp
-from app.auth import check_event_code, new_token, require_guest
+from app.auth import check_event_code, issue_token, require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import NICKNAME_MAX, RELATION_MAX, Blessing, Favorite, Guest, Like, Photo
+from app.models import (
+    NICKNAME_MAX,
+    RELATION_MAX,
+    Blessing,
+    Favorite,
+    Guest,
+    Like,
+    Photo,
+    TransferCode,
+    iso,
+    now,
+)
 
 
 def _json_body() -> dict:
@@ -44,13 +58,12 @@ def create_guest():
     body = _json_body()
     check_event_code(body.get("eventCode"))
 
-    token, token_hash = new_token()
     guest = Guest(
         nickname=_clean_nickname(body.get("nickname")),
         relation=_clean_relation(body.get("relation")),
-        token_hash=token_hash,
     )
     db.session.add(guest)
+    token = issue_token(guest)
     db.session.commit()
 
     return jsonify({"token": token, "guest": guest.to_json()}), 201
@@ -101,3 +114,54 @@ def update_me():
     db.session.commit()
 
     return jsonify({"guest": g.guest.to_json()})
+
+
+# --- 接續碼 ---------------------------------------------------------------
+# 換瀏覽器或裝置時延續同一位賓客。連結裡放的是一次性、限時的接續碼，不是 token 本身：
+# 網址會留在瀏覽紀錄、可能被轉傳，直接放 token 等於把身分永久交出去。
+
+# 去掉容易看錯的 0/O、1/I/L，萬一要手動輸入也不會打錯
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_CODE_LENGTH = 8
+
+
+def _new_code() -> str:
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_LENGTH))
+
+
+@bp.post("/me/transfer-codes")
+@require_guest
+def create_transfer_code():
+    """產生接續碼。完整連結由前端組（前端才知道自己的網址）。"""
+    minutes = current_app.config["TRANSFER_CODE_MINUTES"]
+    transfer = TransferCode(
+        code=_new_code(),
+        guest_id=g.guest.id,
+        expires_at=now() + timedelta(minutes=minutes),
+    )
+    db.session.add(transfer)
+    db.session.commit()
+    return jsonify({"code": transfer.code, "expiresAt": iso(transfer.expires_at)}), 201
+
+
+@bp.post("/guests/claim")
+def claim_transfer_code():
+    """用接續碼在這個裝置領一組新的 token。這時還沒有 token，所以不檢查 token。
+
+    原本的裝置不會被登出：每個裝置各有自己的 token。
+    """
+    body = _json_body()
+    raw = body.get("transferCode")
+    code = raw.strip().upper() if isinstance(raw, str) else ""
+
+    transfer = db.session.get(TransferCode, code) if code else None
+    if transfer is None or transfer.used_at is not None:
+        raise ApiError(401, "invalid_transfer_code", "這個連結已經用過或無效，請在原本的裝置重新產生")
+    if transfer.expires_at <= now():
+        raise ApiError(401, "transfer_code_expired", "這個連結已經過期，請在原本的裝置重新產生")
+
+    transfer.used_at = now()
+    guest = db.session.get(Guest, transfer.guest_id)
+    token = issue_token(guest)
+    db.session.commit()
+    return jsonify({"token": token, "guest": guest.to_json()})

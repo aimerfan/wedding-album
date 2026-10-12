@@ -13,7 +13,7 @@ from flask.cli import with_appcontext
 from PIL import Image, ImageChops
 
 from app import images, storage
-from app.auth import new_token
+from app.auth import issue_token
 from app.db import db
 from app.models import Blessing, Guest, Like, Photo, WeddingPhoto, now
 
@@ -110,9 +110,9 @@ def seed_command(reset: bool):
     tokens = []
     guests = []
     for nickname, relation in GUESTS:
-        token, token_hash = new_token()
-        guest = Guest(nickname=nickname, relation=relation, token_hash=token_hash)
+        guest = Guest(nickname=nickname, relation=relation)
         db.session.add(guest)
+        token = issue_token(guest)
         guests.append(guest)
         tokens.append((nickname, token))
     db.session.flush()

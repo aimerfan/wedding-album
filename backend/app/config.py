@@ -37,5 +37,7 @@ def load() -> dict:
         "MAX_UPLOADS_PER_HOUR": _int("MAX_UPLOADS_PER_HOUR", 300),
         "UPLOAD_CONCURRENCY": _int("UPLOAD_CONCURRENCY", 3),
         "MAX_BLESSING_LENGTH": _int("MAX_BLESSING_LENGTH", 200),
+        # 接續碼幾分鐘內有效
+        "TRANSFER_CODE_MINUTES": _int("TRANSFER_CODE_MINUTES", 30),
         "UPLOADS_OPEN": _bool("UPLOADS_OPEN", True),
     }

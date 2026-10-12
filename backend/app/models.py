@@ -44,9 +44,8 @@ class Guest(db.Model):
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default=lambda: _new_id("g_"))
     nickname: Mapped[str] = mapped_column(String(NICKNAME_MAX))
     relation: Mapped[str | None] = mapped_column(String(RELATION_MAX))
-    # 只存 token 的雜湊值。資料庫外流時，拿到的人也無法冒充賓客。
-    # 預先匯入的祝福作者沒有 token（None），他們不會用手機登入，只是掛名在祝福上
-    token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    # 預先匯入的祝福作者：不是透過 app 加入的，沒有 token、不能登入，只是掛名在祝福上
+    imported: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=now)
 
     def to_json(self) -> dict:
@@ -55,10 +54,33 @@ class Guest(db.Model):
             data["relation"] = self.relation
         return data
 
-    @property
-    def imported(self) -> bool:
-        """預先匯入的祝福作者，不是透過 app 加入的賓客。"""
-        return self.token_hash is None
+
+class AuthToken(db.Model):
+    """登入用的 token。一位賓客每個裝置各一組（用接續碼換到新裝置時會多一組）。
+
+    只存雜湊值。資料庫外流時，拿到的人也無法冒充賓客。
+    """
+
+    __tablename__ = "auth_tokens"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    guest_id: Mapped[str] = mapped_column(ForeignKey("guests.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(default=now)
+
+    guest: Mapped[Guest] = relationship(lazy="joined")
+
+
+class TransferCode(db.Model):
+    """接續碼：在另一個瀏覽器或裝置延續同一位賓客的身分。一次性、限時。見 docs/api.md。"""
+
+    __tablename__ = "transfer_codes"
+
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)
+    guest_id: Mapped[str] = mapped_column(ForeignKey("guests.id"))
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    expires_at: Mapped[datetime]
+    # 用過就填上時間，之後不能再用
+    used_at: Mapped[datetime | None]
 
 
 class Photo(db.Model):

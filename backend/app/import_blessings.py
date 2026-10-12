@@ -92,7 +92,7 @@ def import_blessings_command(path: str, dry_run: bool):
     # 同名的匯入作者共用一筆賓客資料；app 裡的賓客不會被拿來用
     authors: dict[str, Guest] = {
         g.nickname: g
-        for g in db.session.scalars(db.select(Guest).where(Guest.token_hash.is_(None)))
+        for g in db.session.scalars(db.select(Guest).where(Guest.imported.is_(True)))
     }
 
     created = skipped = 0
@@ -105,7 +105,7 @@ def import_blessings_command(path: str, dry_run: bool):
             skipped += 1
             continue
         if author is None:
-            author = Guest(nickname=nickname, relation=relation, token_hash=None)
+            author = Guest(nickname=nickname, relation=relation, imported=True)
             db.session.add(author)
             authors[nickname] = author
         # 留言牆新的在上面：第一列的時間最晚，才會排在最上面

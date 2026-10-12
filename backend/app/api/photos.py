@@ -198,7 +198,7 @@ def get_stats():
             "photoCount": count(db.select(func.count()).select_from(Photo)),
             # 透過 app 加入相簿的賓客人數，不含預先匯入的祝福作者
             "guestCount": count(
-                db.select(func.count()).select_from(Guest).where(Guest.token_hash.is_not(None))
+                db.select(func.count()).select_from(Guest).where(Guest.imported.is_(False))
             ),
             "blessingCount": count(db.select(func.count()).select_from(Blessing)),
             # 留言牆標題「32 位賓客留下了 47 則祝福」的 32：留過祝福的人數，含預先匯入的

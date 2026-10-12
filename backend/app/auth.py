@@ -12,13 +12,17 @@ from flask import current_app, g, request
 
 from app.db import db
 from app.errors import ApiError
-from app.models import Guest
+from app.models import AuthToken, Guest
 
 
-def new_token() -> tuple[str, str]:
-    """產生 (token 明文, 雜湊值)。明文回給前端，雜湊值存進資料庫。"""
+def issue_token(guest: Guest) -> str:
+    """發一組新的 token 給這位賓客（加進資料庫，還沒 commit），回傳明文給前端。
+
+    每個裝置各一組，所以發新的不會讓其他裝置登出。
+    """
     token = secrets.token_urlsafe(32)
-    return token, hash_token(token)
+    db.session.add(AuthToken(token_hash=hash_token(token), guest=guest))
+    return token
 
 
 def hash_token(token: str) -> str:
@@ -37,7 +41,8 @@ def _guest_from_request() -> Guest | None:
     scheme, _, token = header.partition(" ")
     if scheme != "Bearer" or not token:
         return None
-    return db.session.scalar(db.select(Guest).filter_by(token_hash=hash_token(token)))
+    found = db.session.get(AuthToken, hash_token(token))
+    return found.guest if found else None
 
 
 def require_guest(view):

@@ -2,7 +2,7 @@ import pytest
 
 from app import create_app
 from app.db import db
-from app.models import Guest
+from app.models import AuthToken
 from tests.conftest import EVENT_CODE, auth
 
 
@@ -68,9 +68,12 @@ def test_token_is_stored_only_as_hash(app, join):
     token, guest = join()
 
     with app.app_context():
-        stored = db.session.get(Guest, guest["id"])
-        assert stored.token_hash != token
-        assert token not in stored.token_hash
+        stored = db.session.scalars(
+            db.select(AuthToken).where(AuthToken.guest_id == guest["id"])
+        ).all()
+        assert len(stored) == 1
+        assert stored[0].token_hash != token
+        assert token not in stored[0].token_hash
 
 
 # --- 驗 token -------------------------------------------------------------
