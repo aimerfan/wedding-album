@@ -16,6 +16,7 @@ const albumConfig = useAlbumConfig()
 
 /** 跟首頁的篩選 chips 同一套分類 */
 const tagOptions: { id: PhotoTag; label: string }[] = [
+  { id: 'engagement', label: '訂婚・迎娶' },
   { id: 'welcome', label: '迎賓' },
   { id: 'ceremony', label: '儀式' },
   { id: 'banquet', label: '宴客' },
@@ -571,9 +572,11 @@ onBeforeRouteLeave(() => {
   font-size: 13px;
 }
 
+/* 四個選項排一列太擠（「訂婚・迎娶」放不下），排成兩欄 */
 .tags {
   clear: both;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 

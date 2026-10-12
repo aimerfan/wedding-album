@@ -20,7 +20,7 @@ type Chip = { id: string; label: string; filter: PhotoFilter }
 /** 篩選交給後端（GET /api/photos 的參數），每個 chip 各自是一串快取的列表 */
 const chips: Chip[] = [
   { id: 'all', label: '全部', filter: {} },
-  { id: 'today', label: '今天', filter: { date: 'today' } },
+  { id: 'engagement', label: '訂婚・迎娶', filter: { tag: 'engagement' } },
   { id: 'welcome', label: '迎賓', filter: { tag: 'welcome' } },
   { id: 'ceremony', label: '儀式', filter: { tag: 'ceremony' } },
   { id: 'banquet', label: '宴客', filter: { tag: 'banquet' } },

@@ -216,3 +216,8 @@ def test_failed_upload_leaves_nothing_behind(app, client, token):
     upload(client, token, b"broken", filename="p.jpg")
 
     assert client.get("/api/photos", headers=auth(token)).get_json()["items"] == []
+
+
+def test_engagement_tag(client, token):
+    res = upload(client, token, make_image(), tag="engagement")
+    assert res.get_json()["tag"] == "engagement"

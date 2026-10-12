@@ -13,7 +13,8 @@ from app.db import db
 NICKNAME_MAX = 20
 RELATION_MAX = 30
 
-PHOTO_TAGS = ("welcome", "ceremony", "banquet")
+# 照片分類，依當天流程排列：訂婚・迎娶、迎賓、儀式、宴客
+PHOTO_TAGS = ("engagement", "welcome", "ceremony", "banquet")
 
 # 回給前端的時間一律用台灣時間。台灣沒有日光節約，固定 +08:00 即可
 TAIPEI = timezone(timedelta(hours=8), "Asia/Taipei")
