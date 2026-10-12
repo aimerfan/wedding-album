@@ -20,7 +20,7 @@ const open = ref(false)
       :aria-expanded="open"
       @click="open = !open"
     >
-      <span class="aa-small">A</span><span class="aa-big">A</span>
+      <span class="aa-mark"><span class="aa-small">A</span><span class="aa-big">A</span></span>
     </button>
 
     <div v-if="!compact || open" class="options" role="radiogroup" aria-label="字體大小">
@@ -56,11 +56,19 @@ const open = ref(false)
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   color: var(--c-ink);
-  font-family: var(--f-serif);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 兩個 A 對齊底線，整組置中在圓裡；用系統的無襯線粗體，小尺寸才清楚 */
+.aa-mark {
   display: flex;
   align-items: baseline;
-  justify-content: center;
-  padding-top: 10px;
+  gap: 1px;
+  line-height: 1;
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-weight: 700;
 }
 
 .aa-small {

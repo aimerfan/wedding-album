@@ -139,7 +139,7 @@ async function enter() {
           v-model="name"
           type="text"
           class="field-input"
-          placeholder="小慧"
+          placeholder="小婷"
           autocomplete="nickname"
           enterkeyhint="go"
           maxlength="20"
@@ -188,7 +188,7 @@ async function enter() {
             autocomplete="off"
             spellcheck="false"
             maxlength="12"
-            placeholder="例如 7Q2K9MPX"
+            placeholder="例如：7Q2K9MPX"
             aria-label="接續碼"
           />
           <button class="code-submit" type="submit" :disabled="!transferCode.trim() || claiming">
@@ -408,6 +408,15 @@ async function enter() {
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--c-ink);
+}
+
+/* 提示文字跟上面兩格一樣；輸入的接續碼才用等寬字，0 和 O 分得清楚 */
+.code-input::placeholder {
+  font-family: var(--f-serif);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--c-ink-mute);
+  opacity: 0.5;
 }
 
 .code-input:focus {
