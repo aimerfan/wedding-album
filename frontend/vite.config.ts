@@ -11,7 +11,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // 讓 Service Worker 在 dev 也能跑，方便在手機上驗證安裝流程
       devOptions: { enabled: true, type: 'module' },
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png'],
       manifest: {
         name: '婚禮相簿',
         short_name: '婚禮相簿',

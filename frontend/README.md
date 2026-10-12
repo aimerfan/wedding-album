@@ -39,7 +39,11 @@ npm run dev
 
 - `vite-plugin-pwa`，`registerType: 'autoUpdate'`
 - 相片走執行期快取（`CacheFirst`，上限 300 張／30 天），不進 precache
-- `public/` 下的圖示目前是佔位圖，待設計稿確定後替換
+- `public/` 下的圖示都是從原始設計圖 `docs/design/app-icon.webp` 裁切、縮放出來的，分兩種：
+  - `pwa-192x192.png`、`pwa-512x512.png`、`favicon.png`：跟原圖一樣，保留金邊，圓角外面透明。
+  - `apple-touch-icon.png`、`pwa-maskable-512x512.png`：去掉金邊、填滿整個正方形。
+    iPhone 和 Android 放到主畫面時會自己裁圓角，原圖若已經有圓角，就會露出黑邊或變成兩層圓角。
+    `pwa-maskable-512x512.png` 另外把圖縮到 80%、四周補上背景色，因為有些 Android 會裁成圓形，滿版會切到字。
 - iOS 沒有安裝提示 API，需另外做「加到主畫面」的引導畫面
 
 ## 已知的坑
