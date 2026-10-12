@@ -9,7 +9,8 @@ CSV 格式（第一列是標題，欄位名稱中英文都可以）：
     阿凱,祝你們白頭偕老！,新郎的大學室友
     美玲阿姨,新婚快樂,
 
-- 「名字」「祝福」必填，「關係」可留空或整欄省略。
+- 「名字」必填，「關係」可留空或整欄省略。
+- 有名字但「祝福」是空的那列會直接跳過（例如名單上還沒收到祝福的人），其他列照常匯入。
 - 用 Excel 存成「CSV UTF-8」即可，開頭的 BOM 會自動處理。
 - 檔案裡的順序就是留言牆上的順序（第一列在最上面）。
 - 重複匯入同一個檔案不會重複新增：同一個名字已經有一模一樣的祝福就跳過。
@@ -71,23 +72,29 @@ def import_blessings_command(path: str, dry_run: bool):
     # 先全部檢查過，有錯就整批不匯入，不會只匯一半
     entries = []
     errors = []
+    no_text = []
     for line_no, row in enumerate(data_rows, start=2):
         if not any(c.strip() for c in row):
             continue  # 空白列
         nickname, text, relation = cell(row, "nickname"), cell(row, "text"), cell(row, "relation")
+        # 有名字但沒寫祝福（例如名單上還沒收到的人）：跳過這列，其他照常匯入
+        if nickname and not text:
+            no_text.append(line_no)
+            continue
         if not nickname:
             errors.append(f"第 {line_no} 列：沒有名字")
         elif len(nickname) > NICKNAME_MAX:
             errors.append(f"第 {line_no} 列：名字超過 {NICKNAME_MAX} 字")
-        if not text:
-            errors.append(f"第 {line_no} 列：沒有祝福內容")
-        elif len(text) > IMPORT_TEXT_MAX:
+        if len(text) > IMPORT_TEXT_MAX:
             errors.append(f"第 {line_no} 列：祝福超過 {IMPORT_TEXT_MAX} 字")
         if len(relation) > RELATION_MAX:
             errors.append(f"第 {line_no} 列：關係超過 {RELATION_MAX} 字")
         entries.append((nickname, text, relation or None))
     if errors:
         raise click.ClickException("檔案有問題，沒有匯入任何資料：\n" + "\n".join(errors))
+    if no_text:
+        lines = "、".join(str(n) for n in no_text)
+        click.echo(f"略過 {len(no_text)} 列沒有祝福內容的（第 {lines} 列）")
 
     # 同名的匯入作者共用一筆賓客資料；app 裡的賓客不會被拿來用
     authors: dict[str, Guest] = {

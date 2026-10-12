@@ -87,13 +87,25 @@ def test_dry_run_writes_nothing(app, tmp_path):
 
 
 def test_bad_rows_abort_whole_import(app, tmp_path):
-    result = _run(app, tmp_path, "名字,祝福\n阿凱,恭喜\n,沒有名字\n小慧,\n")
+    result = _run(app, tmp_path, "名字,祝福\n阿凱,恭喜\n,沒有名字\n" + "長" * 21 + ",名字太長\n")
 
     assert result.exit_code != 0
     assert "第 3 列" in result.output and "第 4 列" in result.output
     # 有錯就整批不匯入，不會只匯一半
     with app.app_context():
         assert db.session.query(Blessing).count() == 0
+
+
+def test_rows_with_name_but_no_blessing_are_skipped(app, client, join, tmp_path):
+    # 名單上還沒收到祝福的人：跳過那列，其他照常匯入
+    result = _run(app, tmp_path, "名字,祝福,關係\n阿凱,恭喜,\n小慧,,新娘的大學同學\n婷婷,  \n美玲,新婚快樂,\n")
+
+    assert result.exit_code == 0, result.output
+    assert "略過 2 列沒有祝福內容的（第 3、4 列）" in result.output
+    assert [b["guest"]["nickname"] for b in _wall(client, join)] == ["阿凱", "美玲"]
+    with app.app_context():
+        # 跳過的人不會建立賓客資料
+        assert db.session.query(Guest).filter_by(nickname="小慧").count() == 0
 
 
 def test_missing_columns(app, tmp_path):
