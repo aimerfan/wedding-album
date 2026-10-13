@@ -71,8 +71,8 @@ def test_uploaded_photo_shows_in_album(client, token):
 
 
 def test_upload_with_tag(client, token):
-    res = upload(client, token, make_image(), tag="ceremony")
-    assert res.get_json()["tag"] == "ceremony"
+    res = upload(client, token, make_image(), tag="engagement")
+    assert res.get_json()["tag"] == "engagement"
 
 
 def test_display_and_thumbnail_are_resized_jpegs(app, client, token):
@@ -235,7 +235,3 @@ def test_failed_upload_leaves_nothing_behind(app, client, token):
 
     assert client.get("/api/photos", headers=auth(token)).get_json()["items"] == []
 
-
-def test_engagement_tag(client, token):
-    res = upload(client, token, make_image(), tag="engagement")
-    assert res.get_json()["tag"] == "engagement"

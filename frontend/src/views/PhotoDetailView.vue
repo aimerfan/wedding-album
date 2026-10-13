@@ -20,7 +20,7 @@ const route = useRoute()
 const router = useRouter()
 
 /**
- * 左右滑動要在哪一串照片裡換張：由網址上的篩選條件決定（例如 ?uploader=me、?tag=ceremony），
+ * 左右滑動要在哪一串照片裡換張：由網址上的篩選條件決定（例如 ?uploader=me、?tag=banquet），
  * 跟列表頁用的是同一份快取，所以從哪裡點進來，就在那一串裡滑。
  */
 const filter = computed(() => filterFromQuery(route.query))

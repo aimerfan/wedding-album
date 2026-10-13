@@ -21,8 +21,6 @@ type Chip = { id: string; label: string; filter: PhotoFilter }
 const chips: Chip[] = [
   { id: 'all', label: '全部', filter: {} },
   { id: 'engagement', label: '訂婚・迎娶', filter: { tag: 'engagement' } },
-  { id: 'welcome', label: '迎賓', filter: { tag: 'welcome' } },
-  { id: 'ceremony', label: '儀式', filter: { tag: 'ceremony' } },
   { id: 'banquet', label: '宴客', filter: { tag: 'banquet' } },
   // 目前不開放影片，「影片」chip 先拿掉；開放時加回 { kind: 'video' }
 ]

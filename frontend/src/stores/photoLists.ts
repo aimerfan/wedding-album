@@ -103,7 +103,7 @@ export async function reload(filter: PhotoFilter) {
  * 網址 query ⇄ 篩選條件。從列表點進照片詳情時把條件帶在網址上（例如 ?uploader=me），
  * 詳情頁才知道要在哪一串照片裡左右滑；重新整理或分享連結時也不會遺失。
  */
-const TAGS: PhotoTag[] = ['engagement', 'welcome', 'ceremony', 'banquet']
+const TAGS: PhotoTag[] = ['engagement', 'banquet']
 
 export function filterFromQuery(query: Record<string, unknown>): PhotoFilter {
   const pick = (k: string) => (typeof query[k] === 'string' ? (query[k] as string) : undefined)

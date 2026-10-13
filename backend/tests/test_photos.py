@@ -43,12 +43,12 @@ def test_newest_first(client, me, add_photo):
 
 def test_photo_shape(client, me, add_photo):
     token, guest = me
-    add_photo(guest["id"], tag="ceremony", width=3024, height=4032)
+    add_photo(guest["id"], tag="engagement", width=3024, height=4032)
 
     photo = _list(client, token)["items"][0]
 
     assert photo["kind"] == "photo"
-    assert photo["tag"] == "ceremony"
+    assert photo["tag"] == "engagement"
     assert photo["width"] == 3024 and photo["height"] == 4032
     assert photo["uploader"] == guest
     # 網址由後端組好，前端直接使用
@@ -125,10 +125,10 @@ def test_limit_is_capped(client, me, add_photo):
 
 def test_filter_by_tag(client, me, add_photo):
     token, guest = me
-    ceremony = add_photo(guest["id"], tag="ceremony")
+    engagement = add_photo(guest["id"], tag="engagement")
     add_photo(guest["id"], tag="banquet")
 
-    assert _ids(_list(client, token, tag="ceremony")) == [ceremony]
+    assert _ids(_list(client, token, tag="engagement")) == [engagement]
 
 
 def test_invalid_tag_is_400(client, me):

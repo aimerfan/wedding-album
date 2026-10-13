@@ -132,7 +132,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
   - `url`：原檔，格式就是賓客上傳的格式（可能是 HEIC，很多瀏覽器打不開）。只用在下載與匯出，**不要拿來顯示**。
 - `width` / `height`：原圖尺寸（已依拍攝方向轉正），前端拿來算比例排版，**一定要有**。
 - `takenAt`：從 EXIF 讀出來的拍攝時間，讀不到就是 `null`。
-- `tag`：`engagement`（訂婚・迎娶）、`welcome`（迎賓）、`ceremony`（儀式）、`banquet`（宴客）其中一個，上傳時由賓客選。
+- `tag`：`engagement`（訂婚・迎娶）、`banquet`（宴客）其中一個，上傳時由賓客選。
 - `likedByMe`：我有沒有按讚。讚是**公開的**，所有人都看得到 `likeCount`，會算進上傳者的「獲得的讚」。
 - `favoritedByMe`：我有沒有收藏。收藏是**私人的**書籤，只出現在自己「我的 → 收藏」，別人看不到、也不計數。
 
@@ -307,7 +307,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 | 參數 | 對應畫面 |
 | --- | --- |
-| `tag=engagement` / `welcome` / `ceremony` / `banquet` | 首頁的「訂婚・迎娶／迎賓／儀式／宴客」 |
+| `tag=engagement` / `banquet` | 首頁的「訂婚・迎娶／宴客」 |
 | `kind=video` | 首頁的「影片」 |
 | `date=today` | 今天上傳的（以台灣時間算）。首頁目前沒有用到：婚禮當天每張都是今天，事後又都不是 |
 | `uploader=me` | 個人頁的「我上傳的」 |
@@ -329,7 +329,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | 欄位 | 必填 | 說明 |
 | --- | --- | --- |
 | `file` | ✓ | 照片檔 |
-| `tag` | | `engagement` / `welcome` / `ceremony` / `banquet`，預設 `banquet`（多數賓客只參加宴客） |
+| `tag` | | `engagement` / `banquet`，預設 `banquet`（多數賓客只參加宴客） |
 
 回應 `201`，內容是建立好的 Photo。
 

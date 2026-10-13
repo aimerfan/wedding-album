@@ -18,7 +18,7 @@ export interface Guest {
 export type MediaKind = 'photo' | 'video'
 
 /** 相片分類，對應首頁的篩選 chips */
-export type PhotoTag = 'engagement' | 'welcome' | 'ceremony' | 'banquet'
+export type PhotoTag = 'engagement' | 'banquet'
 
 export interface Photo {
   id: PhotoId
