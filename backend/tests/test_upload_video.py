@@ -199,7 +199,7 @@ def test_video_too_large(app, client, token):
 
     assert res.status_code == 413
     assert res.get_json()["error"]["code"] == "file_too_large"
-    assert "影片" in res.get_json()["error"]["message"]
+    assert res.get_json()["error"]["message"] == "影片太大了，單檔上限 0 MB，可以等婚禮過後再分享給新人唷 ♥"
 
 
 def test_photo_limit_does_not_apply_to_video(app, client, token):

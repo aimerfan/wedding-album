@@ -78,7 +78,11 @@ def _file_size(stream) -> int:
 
 
 def _too_large(limit: int, what: str) -> ApiError:
-    return ApiError(413, "file_too_large", f"{what}太大了，單檔上限 {limit // (1024 * 1024)} MB")
+    # 跟前端選取頁的提示一致：傳不了的，給賓客一條出路
+    mb = limit // (1024 * 1024)
+    return ApiError(
+        413, "file_too_large", f"{what}太大了，單檔上限 {mb} MB，可以等婚禮過後再分享給新人唷 ♥"
+    )
 
 
 @bp.post("/photos")
