@@ -371,7 +371,8 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | 方法 | 路徑 | 需要 token | 用途 |
 | --- | --- | --- | --- |
 | `GET` | `/api/config` | ✗ | 前端要遵守的各種上限，以及管理員設定的 Kahoot! 連結 |
-| `PUT` | `/api/settings/kahoot` | ✓（管理員） | 設定或拿掉 Kahoot! 連結 |
+| `GET` | `/api/settings/kahoot` | ✓（管理員） | 目前存的 Kahoot! 連結與開關 |
+| `PUT` | `/api/settings/kahoot` | ✓（管理員） | 設定 Kahoot! 連結與開關 |
 
 ```json
 {
@@ -391,22 +392,25 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 `uploadsOpen` 為 `false` 時代表相簿已截止上傳，前端隱藏上傳按鈕，`POST /api/photos` 回 `403`。
 
-**Kahoot! 連結**：遊戲的 PIN 碼要到主持人開始遊戲時才知道，所以不寫在前端、也不放環境變數，
-由**管理員在 app 裡設定**，所有人（包括還沒加入的歡迎頁）透過 `kahootUrl` 拿到。沒設定時是 `null`，前端不顯示按鈕。
+**Kahoot! 連結**：遊戲的 PIN 碼可能提早拿到、也可能到主持人開始遊戲時才知道，所以不寫在前端、也不放環境變數，
+由**管理員在 app 裡設定**。連結和開關分開：連結可以先存好，**開關打開**後所有人（包括還沒加入的歡迎頁）才會透過
+`kahootUrl` 拿到。沒有連結或開關關著時是 `null`，前端不顯示按鈕。
 
-`PUT /api/settings/kahoot`
+`GET /api/settings/kahoot`、`PUT /api/settings/kahoot`
 
 ```json
-// 請求：url 傳空字串或 null 代表拿掉
-{ "url": "https://kahoot.it/?pin=1234567" }
+// PUT 請求：整份覆蓋。url 傳空字串或 null 代表拿掉（開關也會一起關掉）；enabled 沒傳視為 false
+{ "url": "https://kahoot.it/?pin=1234567", "enabled": true }
 
-// 回應 200
-{ "kahootUrl": "https://kahoot.it/?pin=1234567" }
+// 回應 200（GET 也是這個形狀）
+{ "url": "https://kahoot.it/?pin=1234567", "enabled": true }
 ```
 
 | 錯誤 `code` | 狀態碼 | 何時 |
 | --- | --- | --- |
 | `invalid_url` | `400` | 不是 `http://` 或 `https://` 開頭的網址，或超過 500 字 |
+| `url_required` | `400` | 沒有連結卻要打開開關 |
+| `invalid_body` | `400` | `enabled` 不是 `true`／`false` |
 | `not_admin` | `403` | 不是管理員 |
 
 ### 祝福

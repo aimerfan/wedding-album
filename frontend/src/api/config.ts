@@ -28,7 +28,17 @@ export function fetchConfig(fresh = false): Promise<AlbumConfig> {
   return cached
 }
 
-/** 管理員設定 Kahoot! 連結；傳空字串代表拿掉 */
-export function setKahootUrl(url: string) {
-  return api<{ kahootUrl: string | null }>('/settings/kahoot', { method: 'PUT', body: { url } })
+/** 管理員看到的 Kahoot! 設定：連結可以先存好，enabled 打開才會出現在大家的 kahootUrl */
+export interface KahootSettings {
+  url: string | null
+  enabled: boolean
+}
+
+export function fetchKahootSettings() {
+  return api<KahootSettings>('/settings/kahoot')
+}
+
+/** 整份覆蓋；url 傳空字串代表拿掉（開關也會一起關掉） */
+export function saveKahootSettings(settings: { url: string; enabled: boolean }) {
+  return api<KahootSettings>('/settings/kahoot', { method: 'PUT', body: settings })
 }

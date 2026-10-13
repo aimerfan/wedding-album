@@ -28,7 +28,7 @@ export function useAlbumConfig(): AlbumConfig {
   return shared
 }
 
-/** 管理員改了 Kahoot! 連結後，直接更新共用的那份 */
+/** 管理員改了 Kahoot! 連結或開關後，直接更新共用的那份（開關關著就傳 null） */
 export function setSharedKahootUrl(url: string | null) {
   shared.kahootUrl = url
 }
