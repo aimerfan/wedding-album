@@ -1,5 +1,6 @@
 /**
- * 上傳照片：POST /api/photos，一個請求一個檔案。見 docs/api.md 的「上傳」。
+ * 上傳照片或影片：POST /api/photos，一個請求一個檔案。見 docs/api.md 的「上傳」。
+ * 是照片還是影片由後端看檔案內容判斷，這裡不必分。
  *
  * 用 XMLHttpRequest 而不是 fetch：fetch 拿不到上傳進度，每張照片就沒辦法有自己的進度條。
  */
