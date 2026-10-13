@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { createBlessing } from '@/api/blessings'
 import { ApiError } from '@/api/client'
 import { fetchConfig } from '@/api/config'
-import { uploadPhoto } from '@/api/upload'
+import { uploadWithRetry } from '@/api/upload'
 import MediaPreview from '@/components/MediaPreview.vue'
 import { FALLBACK, useAlbumConfig } from '@/composables/useAlbumConfig'
 import { addBlessing } from '@/stores/blessingLists'
@@ -84,10 +84,13 @@ interface Task {
   errorMessage?: string
   /** 上傳成功後拿到的照片 id，祝福要掛在第一張上 */
   photoId?: string
+  /** 失敗後正在等著自動重試 */
+  retrying?: boolean
 }
 
 /** 每張照片的上傳狀態，key 是 PickedMedia.id */
 const tasks = reactive<Record<string, Task>>({})
+const retrying = computed(() => selected.value.some((p) => tasks[p.id]?.retrying))
 const running = ref(false)
 
 const failedCount = computed(
@@ -191,11 +194,19 @@ async function upload() {
 
       task.status = 'uploading'
       try {
-        const photo = await uploadPhoto(item.file, tag, (percent) => (task.progress = percent))
-        Object.assign(task, { status: 'succeeded', progress: 100, photoId: photo.id })
+        const photo = await uploadWithRetry(
+          item.file,
+          tag,
+          (percent) => {
+            task.progress = percent
+            if (percent > 0) task.retrying = false
+          },
+          () => (task.retrying = true),
+        )
+        Object.assign(task, { status: 'succeeded', progress: 100, photoId: photo.id, retrying: false })
       } catch (e) {
         const message = e instanceof ApiError ? e.message : '上傳失敗，請稍後再試'
-        Object.assign(task, { status: 'failed', errorMessage: message })
+        Object.assign(task, { status: 'failed', errorMessage: message, retrying: false })
         if (e instanceof ApiError && [401, 403, 429].includes(e.status)) stopReason = message
       }
     }
@@ -297,6 +308,7 @@ onBeforeRouteLeave(() => {
         </button>
       </div>
       <p v-if="hasVideo" class="video-hint">影片比較大，上傳時請停留在這一頁，也不要關掉螢幕。</p>
+      <p v-if="retrying" class="video-hint">現在上傳的人比較多，稍等一下會自動重新上傳…</p>
       <p v-if="blessingError" class="upload-error" role="alert">{{ blessingError }}</p>
       <p v-if="failedMessage" class="upload-error" role="alert">
         {{ failedMessage }}

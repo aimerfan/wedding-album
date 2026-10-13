@@ -4,7 +4,7 @@ import { fetchConfig, type AlbumConfig } from '@/api/config'
 /** 拿不到後端設定時的保底值，跟後端預設一致 */
 export const FALLBACK: AlbumConfig = {
   maxPhotoBytes: 30 * 1024 * 1024,
-  maxVideoBytes: 200 * 1024 * 1024,
+  maxVideoBytes: 95 * 1024 * 1024,
   maxVideoSeconds: 180,
   maxUploadsPerHour: 300,
   uploadConcurrency: 3,
