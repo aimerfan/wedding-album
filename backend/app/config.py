@@ -36,8 +36,11 @@ def load() -> dict:
         "MEDIA_BASE_URL": os.environ.get("MEDIA_BASE_URL", "/media"),
         "MAX_PHOTO_BYTES": _int("MAX_PHOTO_BYTES", 30 * MB),
         "MAX_VIDEO_BYTES": _int("MAX_VIDEO_BYTES", 200 * MB),
+        "MAX_VIDEO_SECONDS": _int("MAX_VIDEO_SECONDS", 180),
         "MAX_UPLOADS_PER_HOUR": _int("MAX_UPLOADS_PER_HOUR", 300),
         "UPLOAD_CONCURRENCY": _int("UPLOAD_CONCURRENCY", 3),
+        # 影片動輒上百 MB，跟照片一起搶會場網路會讓每個檔案都變慢，預設一次只傳一支
+        "VIDEO_UPLOAD_CONCURRENCY": _int("VIDEO_UPLOAD_CONCURRENCY", 1),
         "MAX_BLESSING_LENGTH": _int("MAX_BLESSING_LENGTH", 200),
         # 接續碼幾分鐘內有效
         "TRANSFER_CODE_MINUTES": _int("TRANSFER_CODE_MINUTES", 30),

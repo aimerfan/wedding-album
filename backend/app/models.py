@@ -91,12 +91,14 @@ class Photo(db.Model):
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default=lambda: _new_id("p_"))
     uploader_id: Mapped[str] = mapped_column(ForeignKey("guests.id"), index=True)
-    # 目前只收照片；欄位先留著，之後開放影片時不必改資料表
+    # photo 或 video。影片的 original_key 是影片原檔，display_key／thumb_key 是封面
     kind: Mapped[str] = mapped_column(String(8), default="photo")
     tag: Mapped[str] = mapped_column(String(16), default="banquet")
-    # 原圖尺寸，前端用來算比例排版
+    # 原圖尺寸（影片是畫面尺寸），已依拍攝方向轉正，前端用來算比例排版
     width: Mapped[int]
     height: Mapped[int]
+    # 影片長度（秒），照片是 None
+    duration_seconds: Mapped[float | None]
     # 從 EXIF 讀出的拍攝時間，讀不到就是 None
     taken_at: Mapped[datetime | None]
     uploaded_at: Mapped[datetime] = mapped_column(default=now, index=True)
@@ -120,7 +122,7 @@ class Photo(db.Model):
             "thumbnailUrl": storage.url(self.thumb_key),
             "width": self.width,
             "height": self.height,
-            "durationSeconds": None,
+            "durationSeconds": self.duration_seconds,
             "uploader": self.uploader.to_json(),
             "uploadedAt": iso(self.uploaded_at),
             "takenAt": iso(self.taken_at),

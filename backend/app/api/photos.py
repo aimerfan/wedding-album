@@ -5,7 +5,7 @@ from datetime import UTC, datetime, time, timedelta
 from flask import current_app, g, jsonify, request
 from sqlalchemy import func
 
-from app import images, storage
+from app import images, storage, videos
 from app.api import bp
 from app.auth import require_guest
 from app.db import db
@@ -70,26 +70,37 @@ def list_photos():
     return jsonify({"items": photos_to_json(items, g.guest.id), "nextCursor": next_cursor})
 
 
+def _file_size(stream) -> int:
+    stream.seek(0, 2)
+    size = stream.tell()
+    stream.seek(0)
+    return size
+
+
+def _too_large(limit: int, what: str) -> ApiError:
+    return ApiError(413, "file_too_large", f"{what}太大了，單檔上限 {limit // (1024 * 1024)} MB")
+
+
 @bp.post("/photos")
 @require_guest
 def upload_photo():
-    """上傳一張照片。multipart/form-data，欄位 file（必填）、tag（選填，預設 banquet）。"""
+    """上傳一張照片或一支影片。multipart/form-data，欄位 file（必填）、tag（選填，預設 banquet）。
+
+    是照片還是影片看檔案內容判斷，副檔名、Content-Type 都不採信。
+    """
     config = current_app.config
     if not config["UPLOADS_OPEN"]:
         raise ApiError(403, "uploads_closed", "相簿已經截止上傳，謝謝你的參與")
 
     file = request.files.get("file")
     if file is None or not file.filename:
-        raise ApiError(400, "file_required", "請選擇要上傳的照片")
-
-    if (file.mimetype or "").startswith("video/"):
-        raise ApiError(415, "video_not_supported", "目前只能上傳照片，暫不開放影片")
+        raise ApiError(400, "file_required", "請選擇要上傳的照片或影片")
 
     tag = request.form.get("tag") or "banquet"
     if tag not in PHOTO_TAGS:
         raise ApiError(400, "invalid_tag", "照片分類不正確")
 
-    # 每人每小時的上限：正常賓客碰不到，主要防活動碼外流後被灌爆
+    # 每人每小時的上限（照片影片合計）：正常賓客碰不到，主要防活動碼外流後被灌爆
     recent = db.session.scalar(
         db.select(func.count())
         .select_from(Photo)
@@ -98,18 +109,27 @@ def upload_photo():
     if recent >= config["MAX_UPLOADS_PER_HOUR"]:
         raise ApiError(429, "too_many_uploads", "上傳得太快了，請休息一下再繼續")
 
-    data = file.read()
-    if len(data) > config["MAX_PHOTO_BYTES"]:
-        mb = config["MAX_PHOTO_BYTES"] // (1024 * 1024)
-        raise ApiError(413, "file_too_large", f"照片太大了，單張上限 {mb} MB")
+    # 檔案已經在 Werkzeug 的暫存檔裡，先看大小，超過就不必讀進記憶體
+    stream = file.stream
+    size = _file_size(stream)
+    head = stream.read(16)
+    stream.seek(0)
+    if videos.looks_like_video(head):
+        if size > config["MAX_VIDEO_BYTES"]:
+            raise _too_large(config["MAX_VIDEO_BYTES"], "影片")
+        photo = _save_video(stream, tag)
+    else:
+        if size > config["MAX_PHOTO_BYTES"]:
+            raise _too_large(config["MAX_PHOTO_BYTES"], "照片")
+        photo = _save_photo(stream.read(), tag)
 
-    try:
-        processed = images.process_upload(data)
-    except images.UnsupportedImage as e:
-        raise ApiError(415, "unsupported_format", "看不懂這個檔案，請上傳 JPEG、PNG、HEIC 或 WebP 照片") from e
+    return jsonify(photo.to_json(g.guest.id)), 201
 
+
+def _new_photo(kind: str, tag: str, processed) -> Photo:
     photo = Photo(
         uploader_id=g.guest.id,
+        kind=kind,
         tag=tag,
         width=processed.width,
         height=processed.height,
@@ -125,13 +145,50 @@ def upload_photo():
     photo.original_key = f"{folder}/original.{processed.extension}"
     photo.display_key = f"{folder}/display.jpg"
     photo.thumb_key = f"{folder}/thumb.jpg"
-    # 原檔原封不動地存，之後匯出給新人時就是原始畫質
-    storage.save(photo.original_key, data)
     storage.save(photo.display_key, processed.display_jpeg)
     storage.save(photo.thumb_key, processed.thumb_jpeg)
-    db.session.commit()
+    return photo
 
-    return jsonify(photo.to_json(g.guest.id)), 201
+
+def _save_photo(data: bytes, tag: str) -> Photo:
+    try:
+        processed = images.process_upload(data)
+    except images.UnsupportedImage as e:
+        raise ApiError(
+            415, "unsupported_format", "看不懂這個檔案，請上傳 JPEG、PNG、HEIC、WebP 照片或 MP4、MOV 影片"
+        ) from e
+
+    photo = _new_photo("photo", tag, processed)
+    # 原檔原封不動地存，之後匯出給新人時就是原始畫質
+    storage.save(photo.original_key, data)
+    db.session.commit()
+    return photo
+
+
+def _save_video(stream, tag: str) -> Photo:
+    try:
+        processed = videos.process_upload(stream)
+    except videos.UnsupportedVideo as e:
+        raise ApiError(415, "unsupported_format", "看不懂這支影片，請上傳 MP4 或 MOV 影片") from e
+
+    limit = current_app.config["MAX_VIDEO_SECONDS"]
+    # 留一秒誤差：手機顯示 3:00 的影片，檔案裡可能記成 180.4 秒
+    if processed.duration_seconds > limit + 1:
+        raise ApiError(400, "video_too_long", f"影片太長了，請剪到 {_minutes(limit)}以內再上傳")
+
+    photo = _new_photo("video", tag, processed)
+    photo.duration_seconds = processed.duration_seconds
+    # 影片不轉檔，原檔直接拿來播
+    storage.save_stream(photo.original_key, stream)
+    db.session.commit()
+    return photo
+
+
+def _minutes(seconds: int) -> str:
+    m, s = divmod(seconds, 60)
+    if not m:
+        return f"{s} 秒"
+    return f"{m} 分鐘" if not s else f"{m} 分 {s} 秒"
 
 
 def _get_photo_or_404(photo_id: str) -> Photo:

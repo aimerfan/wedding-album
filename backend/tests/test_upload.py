@@ -175,13 +175,6 @@ def test_image_with_fake_extension_is_checked_by_content(client, token):
     assert res.status_code == 415
 
 
-def test_video_is_not_supported_yet(client, token):
-    res = upload(client, token, b"\x00\x00\x00\x18ftypmp42", filename="v.mp4", mimetype="video/mp4")
-
-    assert res.status_code == 415
-    assert res.get_json()["error"]["code"] == "video_not_supported"
-
-
 def test_invalid_tag_is_400(client, token):
     res = upload(client, token, make_image(), tag="party")
     assert res.get_json()["error"]["code"] == "invalid_tag"
