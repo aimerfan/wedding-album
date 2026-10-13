@@ -30,10 +30,10 @@ def _sqlite_pragmas(dbapi_conn, _record) -> None:
     cursor.close()
 
 
-def add_missing_columns() -> None:
-    """既有的資料表少了「可以是空值」的新欄位時，自動補上（例如影片長度）。
+def upgrade_existing_tables() -> None:
+    """既有的資料表少了「可以是空值」的新欄位或新索引時，自動補上（例如影片長度、檔案雜湊）。
 
-    create_all() 只建新資料表、不改舊的；新增可空欄位很安全，不必為此刪資料庫。
+    create_all() 只建新資料表、不改舊的；新增可空欄位與索引很安全，不必為此刪資料庫。
     改欄位型別、刪欄位、新增必填欄位仍然不會自動處理，見 README 的「資料庫」。
     """
     inspector = inspect(db.engine)
@@ -47,3 +47,6 @@ def add_missing_columns() -> None:
                     continue
                 type_sql = column.type.compile(dialect=db.engine.dialect)
                 conn.exec_driver_sql(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {type_sql}')
+            # 索引要在欄位補上之後才建得起來
+            for index in table.indexes:
+                index.create(conn, checkfirst=True)

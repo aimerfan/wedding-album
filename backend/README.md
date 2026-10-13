@@ -110,10 +110,12 @@ backend/
 ## 影片
 
 - 影片**不轉檔**，原檔直接拿來播；後端只用 PyAV 讀長度、尺寸、拍攝時間，抓第一格當封面。
-- 上限：`MAX_VIDEO_BYTES`（預設 200 MB）、`MAX_VIDEO_SECONDS`（預設 180 秒）。前端一次只傳一支（`VIDEO_UPLOAD_CONCURRENCY`）。
+- 上限：`MAX_VIDEO_BYTES`（預設 95 MB，因為 Cloudflare 免費方案單一請求最多 100 MB）、`MAX_VIDEO_SECONDS`（預設 180 秒）。前端一次只傳一支（`VIDEO_UPLOAD_CONCURRENCY`）。
 - 收到的檔案超過 500 KB 時，Werkzeug 會先寫進暫存檔，不會整支放在記憶體裡。
-- **正式環境的網頁伺服器要放寬請求大小與逾時**（例如 nginx 的 `client_max_body_size 201m`），
-  否則影片會在到達 Flask 之前就被擋下。會場網路慢時，一支 200 MB 的影片可能要傳好幾分鐘。
+- **正式環境的網頁伺服器要放寬請求大小與逾時**（例如 nginx 的 `client_max_body_size 100m`），
+  否則影片會在到達 Flask 之前就被擋下。會場網路慢時，一支 95 MB 的影片可能要傳好幾分鐘。
+- 同一位賓客傳了一模一樣的檔案（看 SHA-256），回傳已經有的那張，不會新增：前端逾時自動重送時才不會重複。
+  `photos` 表有 `(uploader_id, content_hash)` 的唯一索引，兩個請求同時寫入也只會留下一筆。
 
 ## 慣例
 

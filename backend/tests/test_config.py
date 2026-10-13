@@ -8,7 +8,7 @@ def test_config_returns_limits(client):
     body = res.get_json()
     assert body == {
         "maxPhotoBytes": 30 * 1024 * 1024,
-        "maxVideoBytes": 200 * 1024 * 1024,
+        "maxVideoBytes": 95 * 1024 * 1024,
         "maxVideoSeconds": 180,
         "maxUploadsPerHour": 300,
         "uploadConcurrency": 3,
@@ -53,7 +53,7 @@ def test_sqlite_uses_wal_and_waits_for_locks(tmp_path):
 
 
 def test_existing_database_gets_new_nullable_columns(tmp_path):
-    # 舊的資料庫沒有影片長度欄位：啟動時自動補上，不必刪資料庫
+    # 舊的資料庫沒有影片長度、檔案雜湊欄位與索引：啟動時自動補上，不必刪資料庫
     import sqlite3
 
     path = tmp_path / "old.db"
@@ -63,10 +63,14 @@ def test_existing_database_gets_new_nullable_columns(tmp_path):
 
         db.engine.dispose()
     with sqlite3.connect(path) as conn:
+        conn.execute("DROP INDEX ix_photos_uploader_hash")
         conn.execute("ALTER TABLE photos DROP COLUMN duration_seconds")
+        conn.execute("ALTER TABLE photos DROP COLUMN content_hash")
 
     create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": f"sqlite:///{path}"})
 
     with sqlite3.connect(path) as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(photos)")}
-    assert "duration_seconds" in columns
+        indexes = {row[1] for row in conn.execute("PRAGMA index_list(photos)")}
+    assert {"duration_seconds", "content_hash"} <= columns
+    assert "ix_photos_uploader_hash" in indexes

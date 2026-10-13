@@ -9,7 +9,7 @@ import os
 from flask import Flask
 
 from app import config, errors
-from app.db import add_missing_columns, db
+from app.db import db, upgrade_existing_tables
 
 DEV_EVENT_CODE = "dev"
 DEV_ADMIN_CODE = "admin"
@@ -62,6 +62,6 @@ def create_app(overrides: dict | None = None) -> Flask:
         # 只會建立還不存在的資料表，不會動到已有的資料。
         # 改了既有欄位不會自動套用，見 README 的「資料庫」
         db.create_all()
-        add_missing_columns()
+        upgrade_existing_tables()
 
     return app

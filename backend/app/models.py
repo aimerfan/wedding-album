@@ -3,7 +3,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app import storage
@@ -86,10 +86,19 @@ class TransferCode(db.Model):
     used_at: Mapped[datetime | None]
 
 
+def new_photo_id() -> str:
+    return _new_id("p_")
+
+
 class Photo(db.Model):
     __tablename__ = "photos"
+    __table_args__ = (
+        # 同一位賓客不會有兩個一模一樣的檔案：逾時重送時兩個請求同時寫入，也只會留下一筆。
+        # 這個欄位加上之前的舊資料是 NULL，不受限制
+        Index("ix_photos_uploader_hash", "uploader_id", "content_hash", unique=True),
+    )
 
-    id: Mapped[str] = mapped_column(String(16), primary_key=True, default=lambda: _new_id("p_"))
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default=new_photo_id)
     uploader_id: Mapped[str] = mapped_column(ForeignKey("guests.id"), index=True)
     # photo 或 video。影片的 original_key 是影片原檔，display_key／thumb_key 是封面
     kind: Mapped[str] = mapped_column(String(8), default="photo")
@@ -99,6 +108,8 @@ class Photo(db.Model):
     height: Mapped[int]
     # 影片長度（秒），照片是 None
     duration_seconds: Mapped[float | None]
+    # 檔案內容的 SHA-256，用來認出重送的同一個檔案
+    content_hash: Mapped[str | None] = mapped_column(String(64))
     # 從 EXIF 讀出的拍攝時間，讀不到就是 None
     taken_at: Mapped[datetime | None]
     uploaded_at: Mapped[datetime] = mapped_column(default=now, index=True)

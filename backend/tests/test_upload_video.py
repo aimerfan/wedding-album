@@ -235,6 +235,16 @@ def test_truncated_video_is_415(client, token):
 def test_videos_count_toward_hourly_limit(app, client, token):
     app.config["MAX_UPLOADS_PER_HOUR"] = 2
 
-    assert upload_video(client, token, make_video()).status_code == 201
+    assert upload_video(client, token, make_video(seconds=1)).status_code == 201
     assert upload(client, token, make_image()).status_code == 201
-    assert upload_video(client, token, make_video()).status_code == 429
+    assert upload_video(client, token, make_video(seconds=2)).status_code == 429
+
+
+def test_same_video_twice_returns_existing(client, token):
+    data = make_video()
+    first = upload_video(client, token, data).get_json()
+
+    again = upload_video(client, token, data)
+
+    assert again.status_code == 200
+    assert again.get_json()["id"] == first["id"]
