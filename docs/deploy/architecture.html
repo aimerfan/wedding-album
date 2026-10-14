@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>婚禮相簿部署架構</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* 版面：單欄技術審閱稿。上方一張由上往下的架構圖，下面依同樣順序逐一說明元件，最後是購買前要決定的事 */
+:root {
+  --bg: #F2F4F6;
+  --surface: #FFFFFF;
+  --fg: #18212C;
+  --muted: #5A6574;
+  --line: #D3D9E0;
+  --api: #0E6B6B;      /* 一般池、主色 */
+  --up: #A85A17;       /* 上傳池 */
+  --edge: #5446A3;     /* Cloudflare／外部 */
+  --warn: #9A3B1E;
+  --api-soft: #E3F0EF;
+  --up-soft: #F6EADF;
+  --edge-soft: #ECEAF7;
+  --warn-soft: #F8E7E1;
+  --f-display: "Noto Serif TC", "Songti TC", serif;
+  --f-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151B; --surface: #1A2029; --fg: #E3E7ED; --muted: #97A1AF; --line: #2D3541;
+    --api: #55B8B3; --up: #E29B57; --edge: #A398E6; --warn: #EE8B6B;
+    --api-soft: #15302F; --up-soft: #33251A; --edge-soft: #23203A; --warn-soft: #3A211A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151B; --surface: #1A2029; --fg: #E3E7ED; --muted: #97A1AF; --line: #2D3541;
+  --api: #55B8B3; --up: #E29B57; --edge: #A398E6; --warn: #EE8B6B;
+  --api-soft: #15302F; --up-soft: #33251A; --edge-soft: #23203A; --warn-soft: #3A211A;
+  color-scheme: dark;
+}
+
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--f-body); font-size: 15px; line-height: 1.75;
+}
+.wrap {
+  max-width: 880px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+  display: grid; gap: 48px;
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.35; }
+h1 { font-family: var(--f-display); font-size: 30px; font-weight: 600; }
+h2 { font-size: 21px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+code { background: var(--api-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--api); }
+a:focus-visible { outline: 2px solid var(--api); outline-offset: 2px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.12em; color: var(--muted); font-weight: 500; }
+.muted { color: var(--muted); }
+
+header { display: grid; gap: 12px; }
+header .lede { max-width: 62ch; color: var(--muted); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.chip b { font-weight: 700; }
+
+section { display: grid; gap: 16px; }
+section > .intro { max-width: 66ch; color: var(--muted); }
+
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+.diagram svg { display: block; width: 100%; min-width: 680px; height: auto; }
+.diagram figcaption { font-size: 13px; color: var(--muted); padding: 0 20px 16px; }
+
+/* SVG */
+.b { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+.b-edge { fill: var(--edge-soft); stroke: var(--edge); }
+.b-api { fill: var(--api-soft); stroke: var(--api); }
+.b-up { fill: var(--up-soft); stroke: var(--up); }
+.b-vps { fill: none; stroke: var(--muted); stroke-dasharray: 6 5; stroke-width: 1.2; }
+.t { fill: var(--fg); font-family: var(--f-body); font-size: 13px; }
+.t-h { fill: var(--fg); font-family: var(--f-body); font-size: 14px; font-weight: 700; }
+.t-s { fill: var(--muted); font-family: var(--f-body); font-size: 12px; }
+.t-m { fill: var(--muted); font-family: var(--f-mono); font-size: 11.5px; }
+.t-up { fill: var(--up); font-family: var(--f-mono); font-size: 11.5px; font-weight: 500; }
+.t-api { fill: var(--api); font-family: var(--f-mono); font-size: 11.5px; font-weight: 500; }
+.ln { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+.ln-up { stroke: var(--up); stroke-width: 1.8; fill: none; }
+.ln-api { stroke: var(--api); stroke-width: 1.8; fill: none; }
+.mk { fill: var(--muted); } .mk-up { fill: var(--up); } .mk-api { fill: var(--api); }
+svg a:hover rect, svg a:focus rect { stroke-width: 2.4; }
+svg a:focus { outline: none; }
+
+/* 元件卡 */
+.comp { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; display: grid; gap: 12px; scroll-margin-top: 16px; }
+.comp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.layer { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.tag { font-size: 12px; padding: 0 8px; border-radius: 4px; font-weight: 500; }
+.tag-edge { background: var(--edge-soft); color: var(--edge); }
+.tag-api { background: var(--api-soft); color: var(--api); }
+.tag-up { background: var(--up-soft); color: var(--up); }
+.tag-paid { background: var(--warn-soft); color: var(--warn); }
+dl.kv { margin: 0; display: grid; grid-template-columns: 7.5em 1fr; gap: 6px 16px; }
+dl.kv dt { color: var(--muted); font-size: 13px; padding-top: 2px; }
+dl.kv dd { margin: 0; min-width: 0; }
+dl.kv ul { margin: 0; padding-left: 1.2em; }
+@media (max-width: 560px) {
+  dl.kv { grid-template-columns: 1fr; gap: 2px; }
+  dl.kv dd { margin-bottom: 8px; }
+}
+.group { display: grid; gap: 14px; }
+.group-label { font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+.pools { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl { overflow-x: auto; }
+.pools th, .pools td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.pools th { font-weight: 500; color: var(--muted); font-size: 13px; }
+.pools td:first-child { color: var(--muted); white-space: nowrap; }
+.pools .num { font-variant-numeric: tabular-nums; }
+
+/* 請求路徑 */
+.flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; }
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.flow ol { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14px; }
+
+/* 審閱發現 */
+.finds { display: grid; gap: 12px; }
+.find { display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 16px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.find .sev { font-size: 12px; font-weight: 700; padding-top: 3px; }
+.sev-buy { color: var(--warn); }
+.sev-deploy { color: var(--up); }
+.sev-opt { color: var(--muted); }
+.find > div { min-width: 0; display: grid; gap: 4px; }
+.find p { font-size: 14px; }
+@media (max-width: 560px) { .find { grid-template-columns: 1fr; } }
+
+.buy { width: 100%; border-collapse: collapse; font-size: 14px; }
+.buy th, .buy td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.buy th { font-weight: 500; color: var(--muted); font-size: 13px; }
+.buy td:first-child { font-weight: 700; white-space: nowrap; }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">部署前審閱 · 2026-10-15</span>
+  <h1>婚禮相簿部署架構</h1>
+  <p class="lede">買網域、租主機之前，由外往內把每一個元件看一遍：它在這個案子裡做什麼、設定寫在哪裡、壞掉會怎樣。最後列出購買前要決定的事。</p>
+  <div class="facts">
+    <span class="chip">做法 <b>B：單機、上傳另外分一池</b></span>
+    <span class="chip">婚禮 <b>10/17</b></span>
+    <span class="chip">WSL 演練 <b>全部通過</b></span>
+    <span class="chip">程式改動 <b>0</b>（設定已在 <span class="mono">deploy/</span>）</span>
+  </div>
+</header>
+
+<section>
+  <h2>整體架構</h2>
+  <figure class="diagram" style="margin:0">
+    <svg viewBox="0 0 760 640" role="img" aria-label="由上往下：賓客手機、Cloudflare、VPS 內的 nginx 分流到上傳池、一般池、照片檔與前端，後端寫入 SQLite 與照片資料夾">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a-up" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-up" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="a-api" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-api" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+
+      <!-- 手機 -->
+      <a href="#c-phone"><rect class="b" x="250" y="16" width="260" height="58" rx="8"/>
+        <text class="t-h" x="380" y="40" text-anchor="middle">賓客手機</text>
+        <text class="t-s" x="380" y="61" text-anchor="middle">瀏覽器／加到主畫面的 PWA</text></a>
+      <line class="ln" x1="380" y1="74" x2="380" y2="110" marker-end="url(#a)"/>
+      <text class="t-m" x="390" y="97">https://網域/?code=活動碼</text>
+
+      <!-- Cloudflare -->
+      <a href="#c-cf"><rect class="b b-edge" x="110" y="112" width="540" height="62" rx="8"/>
+        <text class="t-h" x="380" y="137" text-anchor="middle">網域 + Cloudflare</text>
+        <text class="t-s" x="380" y="159" text-anchor="middle">DNS · 代理（橘色雲）· 對外憑證 · 快取照片與前端 · 單一請求 ≤ 100 MB</text></a>
+      <line class="ln" x1="380" y1="174" x2="380" y2="246" marker-end="url(#a)"/>
+      <text class="t-m" x="390" y="206">HTTPS · Origin Certificate</text>
+      <text class="t-m" x="390" y="222">（Full strict）</text>
+
+      <!-- VPS -->
+      <a href="#c-vps"><rect class="b-vps" x="16" y="190" width="728" height="436" rx="12"/>
+        <text class="t-h" x="32" y="214">VPS</text>
+        <text class="t-s" x="68" y="214">Ubuntu 26.04 · 防火牆 22 / 80 / 443</text></a>
+
+      <!-- nginx -->
+      <a href="#c-nginx"><rect class="b" x="60" y="248" width="640" height="58" rx="8"/>
+        <text class="t-h" x="380" y="272" text-anchor="middle">nginx（:443）</text>
+        <text class="t-s" x="380" y="294" text-anchor="middle">解密 · 依路徑分流 · 直接送檔案 · 先收完整個上傳再交給後端</text></a>
+
+      <!-- 分流線 -->
+      <line class="ln-up" x1="130" y1="306" x2="130" y2="358" marker-end="url(#a-up)"/>
+      <text class="t-up" x="136" y="336">POST /api/photos</text>
+      <line class="ln-api" x1="305" y1="306" x2="305" y2="358" marker-end="url(#a-api)"/>
+      <text class="t-api" x="311" y="336">其他 /api/*</text>
+      <line class="ln" x1="475" y1="306" x2="475" y2="358" marker-end="url(#a)"/>
+      <text class="t-m" x="481" y="336">/media/*</text>
+      <line class="ln" x1="630" y1="306" x2="630" y2="358" marker-end="url(#a)"/>
+      <text class="t-m" x="636" y="336">其他路徑</text>
+
+      <!-- 第二列 -->
+      <a href="#c-pools"><rect class="b b-up" x="55" y="360" width="150" height="74" rx="8"/>
+        <text class="t-h" x="130" y="384" text-anchor="middle">上傳池</text>
+        <text class="t-m" x="130" y="403" text-anchor="middle">gunicorn :8001</text>
+        <text class="t-s" x="130" y="421" text-anchor="middle">3 workers · 120 秒</text></a>
+      <a href="#c-pools"><rect class="b b-api" x="230" y="360" width="150" height="74" rx="8"/>
+        <text class="t-h" x="305" y="384" text-anchor="middle">一般池</text>
+        <text class="t-m" x="305" y="403" text-anchor="middle">gunicorn :8000</text>
+        <text class="t-s" x="305" y="421" text-anchor="middle">4 workers · 30 秒</text></a>
+      <a href="#c-nginx"><rect class="b" x="400" y="360" width="150" height="74" rx="8"/>
+        <text class="t-h" x="475" y="384" text-anchor="middle">照片檔</text>
+        <text class="t-s" x="475" y="403" text-anchor="middle">nginx 直接讀磁碟</text>
+        <text class="t-s" x="475" y="421" text-anchor="middle">快取 30 天 · Range</text></a>
+      <a href="#c-front"><rect class="b" x="555" y="360" width="150" height="74" rx="8"/>
+        <text class="t-h" x="630" y="384" text-anchor="middle">前端</text>
+        <text class="t-m" x="630" y="403" text-anchor="middle">frontend/dist/</text>
+        <text class="t-s" x="630" y="421" text-anchor="middle">Vue + Service Worker</text></a>
+
+      <!-- Flask -->
+      <line class="ln-up" x1="130" y1="434" x2="130" y2="470" marker-end="url(#a-up)"/>
+      <line class="ln-api" x1="305" y1="434" x2="305" y2="470" marker-end="url(#a-api)"/>
+      <a href="#c-flask"><rect class="b" x="55" y="472" width="325" height="58" rx="8"/>
+        <text class="t-h" x="217" y="496" text-anchor="middle">Flask app（兩池跑同一份程式）</text>
+        <text class="t-s" x="217" y="517" text-anchor="middle">驗身分 · HEIC 轉檔 · 抓影片封面 · 寫資料庫</text></a>
+
+      <!-- 資料 -->
+      <line class="ln" x1="130" y1="530" x2="130" y2="554" marker-end="url(#a)"/>
+      <line class="ln" x1="305" y1="530" x2="305" y2="554" marker-end="url(#a)"/>
+      <line class="ln" x1="475" y1="434" x2="475" y2="554" marker-end="url(#a)" stroke-dasharray="4 4"/>
+      <text class="t-m" x="481" y="500">只讀</text>
+      <a href="#c-db"><rect class="b" x="55" y="556" width="150" height="54" rx="8"/>
+        <text class="t-h" x="130" y="579" text-anchor="middle">SQLite（WAL）</text>
+        <text class="t-m" x="130" y="598" text-anchor="middle">wedding.db</text></a>
+      <a href="#c-media"><rect class="b" x="230" y="556" width="320" height="54" rx="8"/>
+        <text class="t-h" x="390" y="579" text-anchor="middle">照片與影片檔</text>
+        <text class="t-m" x="390" y="598" text-anchor="middle">/var/lib/wedding-album/media/</text></a>
+
+      <!-- 旁註 -->
+      <a href="#c-systemd"><rect class="b" x="575" y="460" width="150" height="62" rx="8"/>
+        <text class="t-h" x="650" y="484" text-anchor="middle">systemd</text>
+        <text class="t-s" x="650" y="506" text-anchor="middle">開機啟動、掛了重啟</text></a>
+      <a href="#c-secrets"><rect class="b" x="575" y="540" width="150" height="70" rx="8"/>
+        <text class="t-h" x="650" y="564" text-anchor="middle">設定與機密</text>
+        <text class="t-s" x="650" y="584" text-anchor="middle">env · 憑證</text>
+        <text class="t-s" x="650" y="601" text-anchor="middle">不進 git</text></a>
+    </svg>
+    <figcaption>點方塊跳到該元件的說明。橘色是上傳的路，綠色是其他 API 的路；兩條路在 nginx 分開，到資料層才會合。</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>逐一說明</h2>
+  <p class="intro">由外往內排列，跟一個請求實際經過的順序相同。</p>
+
+  <div class="group">
+    <div class="group-label">主機外面</div>
+
+    <article class="comp" id="c-phone">
+      <div class="comp-head"><span class="layer">L0</span><h3>賓客手機（瀏覽器／PWA）</h3></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd>掃會場 QR code 打開網址，網址裡的活動碼換到一組匿名 token，存在手機裡當作身分。可以加到主畫面，之後像 App 一樣打開。</dd>
+        <dt>Service Worker</dt><dd>預先存好前端程式，縮圖與顯示圖用 CacheFirst 存最多 300 張。<b>不碰</b> <code>/api/</code> 和原檔，避免手機空間被影片吃光。只在正式憑證下才會註冊，所以本機演練測不到。</dd>
+        <dt>設定在</dt><dd><code>frontend/vite.config.ts</code></dd>
+        <dt>失效時</dt><dd>清除瀏覽器資料就變成新賓客，這是刻意接受的取捨；換手機可用接續碼接回。</dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-cf">
+      <div class="comp-head"><span class="layer">L1</span><h3>網域 + Cloudflare</h3><span class="tag tag-edge">免費方案</span><span class="tag tag-paid">網域要付費</span></div>
+      <dl class="kv">
+        <dt>網域</dt><dd>印在 QR code 上的那個名字。<b>一定下來就不能換</b>，換了就要重印。</dd>
+        <dt>DNS</dt><dd>一筆 A 記錄指向 VPS 的 IP，開橘色雲。開了之後外界查到的是 Cloudflare 的 IP，主機的 IP 不會曝光。</dd>
+        <dt>代理與憑證</dt><dd>手機到 Cloudflare 用 Cloudflare 自動發的公開憑證；Cloudflare 到主機用 <b>Origin Certificate</b>（只有 Cloudflare 認得，瀏覽器不認）。模式設 <b>Full (strict)</b>，兩段都加密而且會驗證主機的憑證。</dd>
+        <dt>快取</dt><dd><code>/media/</code> 和 <code>/assets/</code> 由 nginx 標成可長期快取，Cloudflare 照著存，同一張照片被一百人看，主機只送一次。<code>index.html</code>、<code>sw.js</code> 標成不快取，改版才推得出去。</dd>
+        <dt>限制</dt><dd>免費方案單一請求最多 100 MB、主機要在 100 秒內開始回應。後端的影片上限 95 MB 就是從這裡來的。</dd>
+        <dt>失效時</dt><dd>Cloudflare 本身掛掉整站就連不上，這個我們無法控制。刪掉的照片在 Cloudflare 快取裡還會留著，需要手動 Purge。</dd>
+      </dl>
+    </article>
+  </div>
+
+  <div class="group">
+    <div class="group-label">主機本身</div>
+
+    <article class="comp" id="c-vps">
+      <div class="comp-head"><span class="layer">L2</span><h3>VPS 與防火牆</h3><span class="tag tag-paid">月費</span></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd>唯一的一台主機，所有程式和資料都在上面。</dd>
+        <dt>規格</dt><dd>Ubuntu <b>26.04</b>（內建 Python 3.14，不必另外裝）· 東京／新加坡／台灣機房 · 2 vCPU · 4 GB · 50～80 GB 硬碟。硬碟估算約 30 GB（3000 張照片 × 5 MB ＋ 200 支影片 × 60 MB），加婚紗照與餘裕。</dd>
+        <dt>防火牆</dt><dd>只開 22（SSH）、80（轉到 443）、443。後端的 8000、8001 只聽 <code>127.0.0.1</code>，外面本來就連不到。</dd>
+        <dt>登入</dt><dd>只用 SSH 金鑰。</dd>
+        <dt>失效時</dt><dd>主機壞掉就全部停擺，而且<b>目前沒有自動備份</b>，照片會跟著沒了。見下面的審閱發現。</dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-nginx">
+      <div class="comp-head"><span class="layer">L3</span><h3>nginx</h3></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd>主機的大門，所有請求都先到這裡。</dd>
+        <dt>分流</dt><dd>
+          <ul>
+            <li><code>POST /api/photos</code> → 上傳池。同一個網址的 <code>GET</code>（照片列表）走一般池，靠 <code>map $request_method</code> 判斷。</li>
+            <li>其他 <code>/api/</code> → 一般池，30 秒逾時。</li>
+            <li><code>/media/</code> → 直接從磁碟送，不經過 Python；影片播放要的 Range 請求 nginx 原生支援。</li>
+            <li>其他路徑 → <code>frontend/dist/</code>，找不到的都回 <code>index.html</code>（前端路由）。</li>
+          </ul>
+        </dd>
+        <dt>上傳緩衝</dt><dd>上傳的檔案由 nginx <b>先完整收下</b>才交給 gunicorn。會場網路慢、傳了三分鐘的手機只佔住 nginx，不佔後端的 worker。這是分池能成立的前提。</dd>
+        <dt>大小與逾時</dt><dd>上傳放寬到 100 MB、兩次收到資料間隔最多 120 秒、後端處理最多 150 秒；其他請求限 1 MB。</dd>
+        <dt>其他</dt><dd>80 一律轉 443 · JSON／JS／CSS 壓縮 · 補上 heic、mov 的檔案類型。</dd>
+        <dt>設定在</dt><dd><code>deploy/nginx/wedding-album.conf</code>，部署時把 <code>album.example.com</code> 換成實際網域。</dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-systemd">
+      <div class="comp-head"><span class="layer">L3</span><h3>systemd</h3></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd>管理後端程式的生命週期：開機自動啟動、掛了自動重啟、記錄集中到 <code>journalctl</code>。</dd>
+        <dt>三個服務</dt><dd>
+          <ul>
+            <li><code>wedding-album-init</code>：跑一次就結束，先建好資料表。另外兩個都依賴它，避免兩池同時建表互撞。</li>
+            <li><code>wedding-album-api</code>：一般池。</li>
+            <li><code>wedding-album-upload</code>：上傳池。</li>
+          </ul>
+        </dd>
+        <dt>身分</dt><dd>以系統使用者 <code>wedding</code> 執行：不能登入、沒有家目錄，只擁有 <code>/var/lib/wedding-album/</code>。</dd>
+        <dt>設定在</dt><dd><code>deploy/systemd/*.service</code></dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-pools">
+      <div class="comp-head"><span class="layer">L4</span><h3>gunicorn：上傳池與一般池</h3><span class="tag tag-up">上傳</span><span class="tag tag-api">一般</span></div>
+      <p>gunicorn 是正式環境跑 Flask 的伺服器，一個池就是一組 worker 行程。<b>分兩池的理由</b>：HEIC 轉檔、抓影片封面很吃 CPU，如果跟瀏覽共用 worker，上傳高峰時大家滑相簿、按讚都會排隊。分開之後上傳再塞，瀏覽那一池仍然有空的 worker。</p>
+      <div class="tbl">
+        <table class="pools">
+          <thead><tr><th></th><th>上傳池</th><th>一般池</th></tr></thead>
+          <tbody>
+            <tr><td>位址</td><td class="mono">127.0.0.1:8001</td><td class="mono">127.0.0.1:8000</td></tr>
+            <tr><td>負責</td><td>只有 <code>POST /api/photos</code></td><td>列表、詳情、讚、收藏、祝福、管理…</td></tr>
+            <tr><td>worker 數</td><td class="num">3（= 同時處理 3 個上傳）</td><td class="num">4</td></tr>
+            <tr><td>逾時</td><td class="num">120 秒，重啟時等進行中的做完</td><td class="num">30 秒</td></tr>
+            <tr><td>其他</td><td>處理 500 次換新 worker，避免影像處理記憶體越用越多</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:14px">worker 數是先抓的，還沒壓測，彩排時看 CPU 與記憶體再調。</p>
+    </article>
+
+    <article class="comp" id="c-flask">
+      <div class="comp-head"><span class="layer">L5</span><h3>Flask app</h3></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd>業務邏輯。兩個池跑的是<b>同一份程式</b>，只是 nginx 送進來的請求不同。</dd>
+        <dt>身分</dt><dd>活動碼換 token，資料庫只存 token 的 SHA-256。管理員用另一組代碼開通。</dd>
+        <dt>上傳</dt><dd>檢查大小與時長 → 算 SHA-256（同一人重送同一檔回傳原本那張）→ 照片轉正方向、產生顯示圖與縮圖；影片用 PyAV 讀長度、抓第一格當封面，原檔不轉檔。中途失敗會清掉已存的檔案。</dd>
+        <dt>限流</dt><dd>每人每小時最多 300 個上傳；婚禮後設 <code>UPLOADS_OPEN=false</code> 截止上傳。所有上限都能用環境變數改，重啟就生效。</dd>
+        <dt>不做的事</dt><dd>正式環境<b>不送</b> <code>/media</code>，那是 nginx 的工作。nginx 沒設好會直接 404，不會悄悄拖慢後端。</dd>
+        <dt>設定在</dt><dd><code>backend/app/config.py</code>（預設值）＋ <code>/etc/wedding-album/env</code>（正式值）</dd>
+      </dl>
+    </article>
+  </div>
+
+  <div class="group">
+    <div class="group-label">資料與設定</div>
+
+    <article class="comp" id="c-db">
+      <div class="comp-head"><span class="layer">L6</span><h3>SQLite</h3></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd>賓客、照片資訊、讚、祝福都在 <code>/var/lib/wedding-album/wedding.db</code> 這一個檔。</dd>
+        <dt>多人同時用</dt><dd>WAL 模式：寫入時其他人照樣能讀。兩個寫入撞在一起時後到的最多等 15 秒，不會直接報錯。婚禮規模（幾百人、寫入都很短）SQLite 足夠。</dd>
+        <dt>備份</dt><dd>不能只複製 <code>wedding.db</code>（最新資料可能還在 <code>-wal</code> 檔裡），要用 <code>sqlite3 wedding.db ".backup 檔名"</code>。</dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-media">
+      <div class="comp-head"><span class="layer">L6</span><h3>照片與影片檔</h3></div>
+      <dl class="kv">
+        <dt>做什麼</dt><dd><code>/var/lib/wedding-album/media/photos/&lt;id&gt;/</code> 底下放 original、display、thumb 三個檔。後端寫入，nginx 讀出。</dd>
+        <dt>為什麼放這裡</dt><dd>跟程式資料夾 <code>/srv/wedding-album/</code> 分開，重新部署、刪掉重抓 repo 都不會動到資料。</dd>
+        <dt>權限</dt><dd>擁有者 <code>wedding</code>，資料夾 755、檔案 644，nginx 才讀得到。匯入指令要以 <code>wedding</code> 身分跑，否則之後後端刪不掉。</dd>
+        <dt>之後</dt><dd>要長期保存再換成 Cloudflare R2（做法 C），只改 <code>storage.py</code> 與 <code>MEDIA_BASE_URL</code>。</dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-secrets">
+      <div class="comp-head"><span class="layer">L6</span><h3>設定與機密</h3></div>
+      <dl class="kv">
+        <dt>env 檔</dt><dd><code>/etc/wedding-album/env</code>，權限 600：<code>EVENT_CODE</code>（沒設後端不啟動）、<code>ADMIN_CODE</code>、資料庫與照片位置。範本是 <code>deploy/wedding-album.env.example</code>。</dd>
+        <dt>憑證</dt><dd><code>/etc/ssl/wedding-album/origin.pem</code> 與 <code>origin.key</code>。私鑰只在 Cloudflare 產生的當下顯示一次。</dd>
+        <dt>原則</dt><dd>都不進 git，另外自己記好。</dd>
+      </dl>
+    </article>
+
+    <article class="comp" id="c-front">
+      <div class="comp-head"><span class="layer">L6</span><h3>前端建置結果與維運工具</h3></div>
+      <dl class="kv">
+        <dt>前端</dt><dd>在主機上 <code>npm ci && npm run build</code> 產生 <code>frontend/dist/</code>，nginx 直接送。檔名帶雜湊的 <code>/assets/</code> 快取一年。</dd>
+        <dt>檢查腳本</dt><dd><code>deploy/smoke-test.sh</code>：部署完打一輪，確認前端、分流、上傳、照片檔、快取標頭、Range。</dd>
+        <dt>匯入</dt><dd><code>flask import-wedding</code>（婚紗照 51 張）、<code>flask import-blessings</code>（祝福 31 則），都先 <code>--dry-run</code>。</dd>
+        <dt>更新</dt><dd><code>git pull</code> → 重建前端 → 裝套件 → 重啟兩池。中斷的上傳前端會自動重送，不會重複。</dd>
+      </dl>
+    </article>
+  </div>
+</section>
+
+<section>
+  <h2>四條典型請求</h2>
+  <div class="flows">
+    <div class="flow">
+      <h3>第一次掃 QR code</h3>
+      <ol>
+        <li>手機打開 <code>https://網域/?code=活動碼</code>，Cloudflare 回快取的前端或向 nginx 拿。</li>
+        <li>前端呼叫 <code>/api/...</code> 加入，nginx 送一般池。</li>
+        <li>Flask 比對活動碼、建賓客、發 token，寫 SQLite。</li>
+        <li>Service Worker 註冊，之後可加到主畫面。</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3>滑相簿</h3>
+      <ol>
+        <li>列表 <code>GET /api/photos</code> → 一般池 → 讀 SQLite，回傳照片網址。</li>
+        <li>縮圖 <code>/media/.../thumb.jpg</code>：先看手機快取，再看 Cloudflare 快取，都沒有才到 nginx 讀磁碟。</li>
+        <li>完全不經過上傳池，上傳再忙也不受影響。</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3>上傳一支影片</h3>
+      <ol>
+        <li>手機傳到 Cloudflare（≤ 100 MB）→ nginx 收完整個檔案（網路慢也只佔 nginx）。</li>
+        <li>nginx 交給上傳池，Flask 算雜湊、讀長度、抓封面、存檔、寫 SQLite。</li>
+        <li>要在 100 秒內開始回應，否則 Cloudflare 會斷線；前端會自動重送，雜湊去重讓它不會重複。</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <h3>播放影片</h3>
+      <ol>
+        <li>瀏覽器用 Range 請求一段一段拿 <code>/media/.../original.mp4</code>。</li>
+        <li>nginx 直接從磁碟回應，Python 不參與。</li>
+        <li>原檔不進 Service Worker 快取。</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>審閱發現</h2>
+  <p class="intro">架構本身沒有要改的地方。以下是這次逐一檢查時看到、還沒寫進文件或還沒決定的事，依「什麼時候要處理」分類。</p>
+  <div class="finds">
+    <div class="find"><span class="sev sev-buy">購買時</span><div>
+      <h3>確認 VPS 商有 Ubuntu 26.04 映像</h3>
+      <p>整套設定和演練都建立在 26.04 內建 Python 3.14 上。如果只有 24.04，就要另外裝 Python 3.14，演練結果也不完全適用。下單前先看映像清單。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-buy">購買時</span><div>
+      <h3>備份：建議直接勾 VPS 商的自動備份或快照</h3>
+      <p>目前唯一沒解決的高影響風險。多數 VPS 商的自動備份是月費加兩成左右，購買時勾選就好，不用寫任何東西，比婚禮前臨時加 rsync 省事。婚禮後照原計畫再手動備份一次。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-buy">購買時</span><div>
+      <h3>網域字尾：Cloudflare 不賣 .tw</h3>
+      <p>Cloudflare 的網域註冊不支援 <code>.tw</code>、<code>.com.tw</code>。想用 .tw 就要在台灣的註冊商買，再把 NS 改到 Cloudflare（生效可能要幾小時）。用 .com 等字尾直接在 Cloudflare 買最快。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-buy">購買時</span><div>
+      <h3>流量額度</h3>
+      <p>上傳約 30 GB 進主機；送出有 Cloudflare 快取擋掉大部分，但影片原檔會一直送。選每月至少 1 TB 流量的方案就不必擔心，大多數方案都有。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-deploy">部署時</span><div>
+      <h3>防火牆與 SSH 的指令還沒寫進 deploy/README</h3>
+      <p><code>docs/deploy/README.md</code> 把「防火牆只開 22、80、443」「能用金鑰登入」列為過關條件，但第一次部署的 1～10 步沒有對應指令。要補上 <code>ufw allow OpenSSH</code>、<code>ufw allow 80,443/tcp</code>、<code>ufw enable</code>，以及關閉 SSH 密碼登入。VPS 商若有網頁版防火牆，設在那邊也可以。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-deploy">部署時</span><div>
+      <h3>加 2 GB swap 當緩衝</h3>
+      <p>7 個 worker 平時各約 100 MB；上傳池轉一張 iPhone 4800 萬畫素 HEIC 時單一 worker 可能衝到數百 MB。4 GB 應該夠，但加一點 swap 可以避免高峰時被系統直接砍掉行程。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-deploy">婚禮前一天</span><div>
+      <h3>暫停自動更新</h3>
+      <p>Ubuntu 預設會自動裝安全更新，可能順帶重啟服務。10/16 手動 <code>apt upgrade</code> 完、彩排沒問題後，暫停 <code>unattended-upgrades</code> 到婚禮結束。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-opt">可不做</span><div>
+      <h3>主機 IP 直連可以繞過 Cloudflare</h3>
+      <p>知道 IP 的人可以略過 Cloudflare 直接連 443（瀏覽器會報憑證錯誤）。IP 不會從 DNS 曝光，婚禮規模風險很低。要堵的話讓防火牆的 80／443 只放 Cloudflare 的 IP 段，代價是之後無法用 IP 直接測。</p>
+    </div></div>
+    <div class="find"><span class="sev sev-opt">可不做</span><div>
+      <h3>Cloudflare 對影片流量的條款</h3>
+      <p>已列在風險表、仍未查證。婚禮一次性、幾百人的規模應該不會被注意，真的被限制時再升級做法 C（影片放 R2）。</p>
+    </div></div>
+  </div>
+</section>
+
+<section>
+  <h2>要買或申請的東西</h2>
+  <div class="tbl">
+    <table class="buy">
+      <thead><tr><th>項目</th><th>選擇</th><th>過關條件</th></tr></thead>
+      <tbody>
+        <tr><td>Cloudflare 帳號</td><td>免費方案</td><td>能登入後台</td></tr>
+        <tr><td>網域</td><td>在 Cloudflare 買（非 .tw）；年費依字尾而定</td><td>後台看得到網域，DNS 在 Cloudflare</td></tr>
+        <tr><td>VPS</td><td>Ubuntu 26.04 · 亞洲機房 · 2 vCPU / 4 GB / 50～80 GB · 流量 ≥ 1 TB · 勾自動備份</td><td>金鑰能 SSH 登入</td></tr>
+        <tr><td>Origin Certificate</td><td>Cloudflare 後台產生，免費</td><td>憑證與私鑰都存下來</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>依據 repo 內 <a class="mono" href="../../deploy/README.md">deploy/</a>、<a class="mono" href="README.md">docs/deploy/README.md</a>、<span class="mono">backend/app/</span> 與 <span class="mono">frontend/vite.config.ts</span> 的現況整理。</footer>
+
+</div>
+</body>
+</html>

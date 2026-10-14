@@ -14,7 +14,7 @@ wedding-album/
 ├── deploy/     # 正式環境設定（nginx、systemd）── 見 deploy/README.md
 └── docs/
     ├── api.md  # API 規格（前後端共用）
-    ├── deploy.md # 部署準備的進度、決策與待辦
+    ├── deploy/ # 部署準備的進度、決策與待辦（README.md）、架構審閱頁（architecture.html）
     └── design/ # 設計稿
 ```
 

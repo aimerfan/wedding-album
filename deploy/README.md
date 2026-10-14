@@ -34,14 +34,49 @@
 
 ## 第一次部署（VPS 的完整流程）
 
-以下都在主機上、用有 sudo 權限的一般帳號執行。`album.example.com` 換成實際網域。
+`album.example.com` 換成實際網域。第 0 步用 root，之後都用第 0 步建的 `deploy` 帳號。
+
+### 0. 主機準備
+
+建立主機時就放好 SSH 公鑰。以下以 Vultr 的 Ubuntu 26.04 映像為準：預設已啟用 `ufw`（只開 22），也已有 8 GB 的 `/swapfile`。
+其他廠商先用 `sudo ufw status`、`swapon --show` 確認，沒有的話自己開 `ufw`（記得先 `ufw allow OpenSSH`）、加 swap。
+
+用 root 登入，更新並設定時區（記錄的時間才是台灣時間；資料庫一律存 UTC，不受影響）：
+
+```bash
+ssh root@<主機 IP>
+apt update && apt upgrade -y
+timedatectl set-timezone Asia/Taipei
+```
+
+升級時問到 `sshd_config` 被改過，選 **keep the local version**（廠商改過的登入設定，換掉可能就登不進來）。
+
+建立日常用的帳號，沿用 root 的金鑰；加進 `systemd-journal` 群組才能直接看服務記錄：
+
+```bash
+adduser deploy                      # 設一組密碼，sudo 時要用
+usermod -aG sudo,systemd-journal deploy
+rsync --archive --chown=deploy:deploy ~/.ssh /home/deploy
+```
+
+**root 的連線先不要關**，另開視窗確認 `ssh deploy@<主機 IP>` 登得進來、`sudo whoami` 印出 `root`。接著在 `deploy` 的連線：
+
+```bash
+sudo ufw allow 80,443/tcp
+echo -e "PermitRootLogin no\nPasswordAuthentication no" | sudo tee /etc/ssh/sshd_config.d/10-hardening.conf
+sudo sshd -t && sudo systemctl reload ssh
+sudo sshd -T | grep -E "^(permitrootlogin|passwordauthentication) "
+```
+
+- 檔名要 `10-` 開頭：SSH 設定先讀到的生效，Vultr 的 `50-cloud-init.conf` 會打開密碼登入。
+- 最後一行要是兩個 `no`。再開新視窗確認 `deploy` 登得進來、`ssh root@<主機 IP>` 被拒，才關掉舊連線。
+- 之後要從別台電腦登入：用廠商後台的網頁終端機（Vultr 是 View Console）以 `deploy` 登入，把那台的公鑰加進 `~/.ssh/authorized_keys`。
 
 ### 1. 安裝套件
 
 Ubuntu 26.04 內建 Python 3.14，不必另外裝；apt 的 Node 22 也符合前端的要求。
 
 ```bash
-sudo apt update && sudo apt upgrade -y
 sudo apt install -y python3-venv git nginx nodejs npm
 ```
 
@@ -101,6 +136,9 @@ sudo chmod 600 /etc/ssl/wedding-album/origin.key
 
 私鑰只會在 Cloudflare 產生的當下顯示一次。
 
+4. Caching → Configuration → **Browser Cache TTL** 改成 **Respect Existing Headers**。
+   預設的 4 小時會蓋掉 nginx 給 `sw.js` 的 `no-cache`，改版後手機可能晚幾小時才更新。
+
 ### 7. nginx
 
 放好設定、換上實際網域、拿掉 Ubuntu 的預設網站（不拿掉的話請求會被它接走，只看到 nginx 歡迎頁）：
@@ -146,28 +184,37 @@ sudo journalctl -u wedding-album-upload --no-pager | tail -5
 
 格式與規則見 backend/README.md 的「匯入婚紗照」「預先匯入祝福」。
 
-先把檔案放到 `wedding` 讀得到的地方。從 Windows 傳到 VPS 用 WinSCP 或 `scp -r` 直接傳資料夾，
-**不要先壓成 zip**：Windows 內建的壓縮可能把中文檔名存成 Big5，到 Linux 解開會變亂碼。
+先把檔案放到 `wedding` 讀得到的地方。放 `/var/tmp`，不要放 `/tmp`：Ubuntu 26.04 的 `/tmp` 在記憶體裡，重開機就清空。
 
 ```bash
-mkdir -p /tmp/wedding-import   # 把 blessings.csv 與婚紗照資料夾 wedding-photos/ 放進來
-chmod -R a+rX /tmp/wedding-import
+mkdir -p /var/tmp/wedding-import   # 主機上
 ```
+
+在自己的電腦（Git Bash）把檔案先複製到本機硬碟再傳，不要直接從 NAS 傳：
+
+```bash
+cd 放檔案的資料夾 && scp -r wedding-photos blessings.csv deploy@<主機 IP>:/var/tmp/wedding-import/
+```
+
+- **不要先壓成 zip**：Windows 內建的壓縮可能把中文檔名存成 Big5，到 Linux 解開會變亂碼。
+- 傳到一半斷線就整包重傳（已傳的會覆蓋）。Windows 的 `sftp` 續傳（`put -a`）遇到主機上還沒有的檔案會失敗，不好用。
+- 傳完在主機上 `chmod -R a+rX /var/tmp/wedding-import`，並核對張數。
 
 指令要以 `wedding` 身分（新檔案的擁有者才對）、帶著同一份環境變數執行。先加 `--dry-run` 預覽，沒問題再拿掉：
 
 ```bash
 cd /srv/wedding-album/backend
 sudo -u wedding env $(sudo grep -v '^#' /etc/wedding-album/env | xargs) FLASK_SKIP_DOTENV=1 \
-    .venv/bin/flask --app app import-blessings /tmp/wedding-import/blessings.csv --dry-run
+    .venv/bin/flask --app app import-blessings /var/tmp/wedding-import/blessings.csv --dry-run
 sudo -u wedding env $(sudo grep -v '^#' /etc/wedding-album/env | xargs) FLASK_SKIP_DOTENV=1 \
-    .venv/bin/flask --app app import-wedding /tmp/wedding-import/wedding-photos --dry-run
+    .venv/bin/flask --app app import-wedding /var/tmp/wedding-import/wedding-photos --dry-run
 ```
 
 - 環境變數檔只有 root 讀得到，所以由 `sudo grep` 讀出來再交給 `wedding`。
 - `FLASK_SKIP_DOTENV=1`：不讀開發用的 `.flaskenv`（裡面有 `FLASK_DEBUG=1`）。
 - 婚紗照每張要產生顯示用與縮圖，50 張左右約一兩分鐘。
 - 匯入後 `ls -l /var/lib/wedding-album/media/` 的擁有者要是 `wedding`；是 root 的話，之後後端刪不掉這些檔案。
+- 確認無誤後刪掉 `/var/tmp/wedding-import`。
 
 ## 更新版本
 
@@ -195,7 +242,7 @@ sudo systemctl restart wedding-album-api wedding-album-upload
 
 ### 跟 VPS 不同的地方
 
-照「第一次部署」的 1～10 步做，以下幾步改成這樣，其他步驟原樣照做：
+照「第一次部署」的 1～10 步做（第 0 步跳過，WSL 本身就是一般帳號），以下幾步改成這樣，其他步驟原樣照做：
 
 - **第 3 步**：直接從 D 槽的 repo clone，不必登入 GitHub。順便裝開發套件，在 Linux 上跑一次測試：
 
