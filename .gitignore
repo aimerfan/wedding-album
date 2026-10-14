@@ -6,3 +6,6 @@
 
 # 個人的 Claude Code 設定，不進 repo。
 /.claude/settings.local.json
+
+# 個人筆記與本機紀錄，不進 repo。
+/.local/
