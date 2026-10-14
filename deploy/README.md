@@ -144,17 +144,30 @@ sudo journalctl -u wedding-album-upload --no-pager | tail -5
 
 ### 10. 匯入婚紗照與祝福
 
-見 backend/README.md。指令要以 `wedding` 身分（新檔案的擁有者才對）、帶著同一份環境變數執行：
+格式與規則見 backend/README.md 的「匯入婚紗照」「預先匯入祝福」。
+
+先把檔案放到 `wedding` 讀得到的地方。從 Windows 傳到 VPS 用 WinSCP 或 `scp -r` 直接傳資料夾，
+**不要先壓成 zip**：Windows 內建的壓縮可能把中文檔名存成 Big5，到 Linux 解開會變亂碼。
+
+```bash
+mkdir -p /tmp/wedding-import   # 把 blessings.csv 與婚紗照資料夾 wedding-photos/ 放進來
+chmod -R a+rX /tmp/wedding-import
+```
+
+指令要以 `wedding` 身分（新檔案的擁有者才對）、帶著同一份環境變數執行。先加 `--dry-run` 預覽，沒問題再拿掉：
 
 ```bash
 cd /srv/wedding-album/backend
 sudo -u wedding env $(sudo grep -v '^#' /etc/wedding-album/env | xargs) FLASK_SKIP_DOTENV=1 \
-    .venv/bin/flask --app app import-wedding /路徑/婚紗照資料夾
+    .venv/bin/flask --app app import-blessings /tmp/wedding-import/blessings.csv --dry-run
+sudo -u wedding env $(sudo grep -v '^#' /etc/wedding-album/env | xargs) FLASK_SKIP_DOTENV=1 \
+    .venv/bin/flask --app app import-wedding /tmp/wedding-import/wedding-photos --dry-run
 ```
 
 - 環境變數檔只有 root 讀得到，所以由 `sudo grep` 讀出來再交給 `wedding`。
 - `FLASK_SKIP_DOTENV=1`：不讀開發用的 `.flaskenv`（裡面有 `FLASK_DEBUG=1`）。
-- 婚紗照資料夾要讓 `wedding` 讀得到，例如先上傳到 `/tmp/` 底下。
+- 婚紗照每張要產生顯示用與縮圖，50 張左右約一兩分鐘。
+- 匯入後 `ls -l /var/lib/wedding-album/media/` 的擁有者要是 `wedding`；是 root 的話，之後後端刪不掉這些檔案。
 
 ## 更新版本
 
