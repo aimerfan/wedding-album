@@ -1,3 +1,5 @@
+from flask import Flask
+
 from app import create_app
 
 
@@ -74,3 +76,30 @@ def test_existing_database_gets_new_nullable_columns(tmp_path):
         indexes = {row[1] for row in conn.execute("PRAGMA index_list(photos)")}
     assert {"duration_seconds", "content_hash"} <= columns
     assert "ix_photos_uploader_hash" in indexes
+
+
+def test_production_paths_do_not_create_instance_folder(monkeypatch, tmp_path):
+    # 正式環境資料庫與照片都在程式資料夾外，執行後端的帳號沒權限在 instance/ 建資料夾
+    instance = tmp_path / "instance"
+    monkeypatch.setattr(Flask, "auto_find_instance_path", lambda self: str(instance))
+    (tmp_path / "data").mkdir()
+
+    create_app(
+        {
+            "EVENT_CODE": "prod-code",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'data' / 'wedding.db'}",
+            "MEDIA_DIR": str(tmp_path / "data" / "media"),
+        }
+    )
+
+    assert not instance.exists()
+
+
+def test_relative_database_path_still_goes_in_instance_folder(monkeypatch, tmp_path):
+    # 開發時的預設：相對路徑的資料庫放在 instance/，資料夾不存在要自動建
+    instance = tmp_path / "instance"
+    monkeypatch.setattr(Flask, "auto_find_instance_path", lambda self: str(instance))
+
+    create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///wedding.db"})
+
+    assert (instance / "wedding.db").exists()

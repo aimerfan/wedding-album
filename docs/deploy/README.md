@@ -63,7 +63,6 @@
 - [x] 9：`bash deploy/smoke-test.sh https://網域 活動碼` 全過（這次不用 `-k`）
 - [x] 10：匯入婚紗照與祝福（先 `--dry-run`）
 - [x] 用手機打開 `https://網域/admin?code=管理員代碼`，開通管理員
-- [ ] repo 修正：後端在正式環境也會建 `backend/instance/`，`wedding` 沒權限而啟動失敗（VPS 上先手動 `mkdir` 繞過）
 
 要帶到 VPS 的檔案（**不在 git 裡**，在原本那台電腦的 `D:\Downloads\wedding-album\`）：
 

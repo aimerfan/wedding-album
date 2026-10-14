@@ -4,8 +4,6 @@
 測試時每個測試都能拿到一個乾淨、設定可以個別調整的 app。
 """
 
-import os
-
 from flask import Flask
 
 from app import config, errors
@@ -46,7 +44,8 @@ def create_app(overrides: dict | None = None) -> Flask:
 
     errors.register(app)
 
-    os.makedirs(app.instance_path, exist_ok=True)
+    # 不自己建 instance/：資料庫用相對路徑時 Flask-SQLAlchemy 會建，照片資料夾由 storage 存檔時建。
+    # 正式環境資料都放在別處，程式資料夾屬於部署帳號，執行後端的 wedding 不能在裡面建資料夾
     db.init_app(app)
 
     from app import import_blessings, import_wedding, models, seed, storage  # noqa: F401  models：讓 create_all 知道有哪些資料表
