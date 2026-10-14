@@ -289,3 +289,44 @@ def test_resend_racing_the_first_request_keeps_one(app, client, token, monkeypat
     root = os.path.join(app.config["MEDIA_DIR"], "photos")
     leftovers = [d for d in os.listdir(root) if d != first["id"] and os.listdir(os.path.join(root, d))]
     assert leftovers == []
+
+
+def test_failed_save_leaves_no_files(app, client, token, monkeypatch):
+    # 原檔存到一半失敗（例如磁碟滿）：先存好的顯示用與縮圖要清掉，資料庫也不留紀錄
+    from app import storage
+
+    real_save = storage.save
+
+    def fail_on_original(key, data):
+        if "/original." in key:
+            raise OSError("No space left on device")
+        real_save(key, data)
+
+    monkeypatch.setattr(storage, "save", fail_on_original)
+
+    res = upload(client, token, make_image())
+
+    assert res.status_code == 500
+    assert client.get("/api/photos", headers=auth(token)).get_json()["items"] == []
+    root = os.path.join(app.config["MEDIA_DIR"], "photos")
+    leftovers = [d for d in os.listdir(root) if os.listdir(os.path.join(root, d))]
+    assert leftovers == []
+
+
+def test_failed_commit_leaves_no_files(app, client, token, monkeypatch):
+    # 檔案都存好了，寫資料庫才失敗（例如資料庫被鎖太久）：檔案一樣要清掉
+    from sqlalchemy.exc import OperationalError
+
+    from app.db import db
+
+    def locked():
+        raise OperationalError("COMMIT", {}, Exception("database is locked"))
+
+    monkeypatch.setattr(db.session, "commit", locked)
+
+    res = upload(client, token, make_image())
+
+    assert res.status_code == 500
+    root = os.path.join(app.config["MEDIA_DIR"], "photos")
+    leftovers = [d for d in os.listdir(root) if os.listdir(os.path.join(root, d))]
+    assert leftovers == []

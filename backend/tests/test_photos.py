@@ -234,3 +234,23 @@ def test_media_files_are_served(app, client):
 
 def test_media_cannot_escape_folder(client):
     assert client.get("/media/../wedding.db").status_code == 404
+
+
+def test_media_not_served_in_production(tmp_path, monkeypatch):
+    # 正式環境由網頁伺服器送照片檔，Flask 不該接手（大檔案會佔住 worker）
+    from app import create_app
+
+    monkeypatch.delenv("FLASK_DEBUG", raising=False)
+    app = create_app(
+        {
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "EVENT_CODE": "prod-code",
+            "MEDIA_DIR": str(tmp_path / "media"),
+        }
+    )
+    from app import storage
+
+    with app.app_context():
+        storage.save("photos/p_1/thumb.jpg", b"fake-jpeg")
+
+    assert app.test_client().get("/media/photos/p_1/thumb.jpg").status_code == 404

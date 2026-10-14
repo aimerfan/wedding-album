@@ -53,7 +53,10 @@ def create_app(overrides: dict | None = None) -> Flask:
     from app.api import bp
 
     app.register_blueprint(bp)
-    app.register_blueprint(storage.bp)
+    # 照片檔只在開發與測試時由 Flask 送出。正式環境由網頁伺服器或雲端儲存提供，
+    # 不讓大檔案佔住後端的 worker；網頁伺服器漏設 /media 時會直接 404，不會悄悄改由 Flask 送
+    if app.debug or app.testing:
+        app.register_blueprint(storage.bp)
     app.cli.add_command(seed.seed_command)
     app.cli.add_command(import_blessings.import_blessings_command)
     app.cli.add_command(import_wedding.import_wedding_command)

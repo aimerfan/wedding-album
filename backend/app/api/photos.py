@@ -214,23 +214,35 @@ def _store(kind: str, tag: str, processed, content_hash: str, save_original) -> 
         thumb_key=f"{folder}/thumb.jpg",
     )
     keys = [photo.display_key, photo.thumb_key, photo.original_key]
-    storage.save(photo.display_key, processed.display_jpeg)
-    storage.save(photo.thumb_key, processed.thumb_jpeg)
-    save_original(photo.original_key)
-
-    db.session.add(photo)
     try:
+        storage.save(photo.display_key, processed.display_jpeg)
+        storage.save(photo.thumb_key, processed.thumb_jpeg)
+        save_original(photo.original_key)
+        db.session.add(photo)
         db.session.commit()
     except IntegrityError:
         # 同一個檔案的另一個請求（例如逾時後的重送）剛好搶先寫進去了：用那一張，這次存的檔案丟掉
         db.session.rollback()
-        for key in keys:
-            storage.delete(key)
+        _discard(keys)
         existing = _find_duplicate(content_hash)
         if existing is None:
             raise
         return existing, False
+    except Exception:
+        # 存到一半失敗（磁碟滿、資料庫鎖太久、之後換雲端時網路斷掉）：已經存下的檔案沒有資料對應，刪掉
+        db.session.rollback()
+        _discard(keys)
+        raise
     return photo, True
+
+
+def _discard(keys: list[str]) -> None:
+    """清掉這次存下的檔案。清理失敗只記錄，不蓋掉原本的錯誤。"""
+    for key in keys:
+        try:
+            storage.delete(key)
+        except Exception:
+            current_app.logger.exception("清不掉上傳失敗留下的檔案 %s", key)
 
 
 def _minutes(seconds: int) -> str:
