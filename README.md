@@ -24,11 +24,12 @@ wedding-album/
 ## 開發狀態
 
 - [x] 前端骨架（路由、PWA、型別、lint）
-- [x] 依風格 A 設計稿實作 8 支畫面（版面完成，互動多數尚未接線）
+- [x] 依風格 A 設計稿實作畫面，並串接後端 API
 - [x] 後端選型（Python 3.14 + Flask）
 - [x] 後端骨架（設定、錯誤格式、測試）
-- [ ] API 規格（草稿：[docs/api.md](docs/api.md)，有待確認項目）
-- [ ] 相片上傳
+- [x] API 規格與實作（[docs/api.md](docs/api.md)）
+- [x] 照片與影片上傳（去重、限流、截止上傳）
+- [ ] 部署（進度見 [docs/deploy.md](docs/deploy.md)）
 
 ## Commit 訊息
 

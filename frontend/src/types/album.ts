@@ -1,6 +1,5 @@
 /**
  * 相簿領域型別，對應 docs/api.md 的「資料形狀」。規格改了這裡要跟著改。
- * Guest、Photo 已經跟後端對齊；其餘的還是前端先寫的版本，接上對應的 API 時再對齊。
  */
 
 export type GuestId = string

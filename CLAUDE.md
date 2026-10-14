@@ -3,8 +3,6 @@
 ## 給 agent 的額外規則
 
 - 不要在根目錄建立 `package.json`、`.nvmrc` 這類綁定特定技術棧的檔案。
-- `frontend/src/types/album.ts` 是前端單方面寫的資料形狀，不是雙方談好的 API 規格。
-  要接 API 時先確認，不要直接當規格實作。
 
 ## 文件分工
 

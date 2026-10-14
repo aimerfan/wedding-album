@@ -46,7 +46,7 @@ npm run dev
   - `apple-touch-icon.png`、`pwa-maskable-512x512.png`：去掉金邊、填滿整個正方形。
     iPhone 和 Android 放到主畫面時會自己裁圓角，原圖若已經有圓角，就會露出黑邊或變成兩層圓角。
     `pwa-maskable-512x512.png` 另外把圖縮到 80%、四周補上背景色，因為有些 Android 會裁成圓形，滿版會切到字。
-- iOS 沒有安裝提示 API，需另外做「加到主畫面」的引導畫面
+- iOS 沒有安裝提示 API，「加到主畫面」改用引導畫面（`components/InstallGuide.vue`），步驟要跟 Safari 實際的分享選單一致
 
 ## 已知的坑
 
