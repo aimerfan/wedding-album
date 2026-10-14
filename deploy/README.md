@@ -17,6 +17,7 @@
 | `nginx/wedding-album.conf` | `/etc/nginx/sites-available/`，再連到 `sites-enabled/` |
 | `systemd/*.service` | `/etc/systemd/system/` |
 | `wedding-album.env.example` | 複製成 `/etc/wedding-album/env`，填好再設成 `chmod 600` |
+| `smoke-test.sh` | 不用放，部署完在主機上執行，見「第一次部署」第 9 步 |
 
 ## 主機上的路徑
 
@@ -33,17 +34,22 @@
 
 ## 第一次部署
 
-1. 主機裝好 nginx、Python 3.14、Node（建置前端用）。
-2. 建使用者與資料夾：`useradd --system wedding`，建立 `/var/lib/wedding-album/` 並交給 `wedding`。
+1. 主機用 Ubuntu 26.04（內建 Python 3.14，不必另外裝），裝好 `python3-venv`、`git`、nginx、Node（建置前端用）。
+2. 建使用者與資料夾：`useradd --system --no-create-home --shell /usr/sbin/nologin wedding`，
+   建立 `/var/lib/wedding-album/` 並交給 `wedding`。
 3. 抓 repo 到 `/srv/wedding-album/`，在 `backend/` 建虛擬環境並 `pip install -r requirements.txt`。
 4. 在 `frontend/` 執行 `npm ci && npm run build`。
 5. 填好 `/etc/wedding-album/env`。`EVENT_CODE` 沒設的話後端不會啟動。
+   會場 QR code 的網址是 `https://網域/?code=<EVENT_CODE>`：正式版本沒有預設活動碼，直接打開首頁會要求掃 QR code。
 6. Cloudflare：DNS 開代理（橘色雲），SSL 模式設 **Full (strict)**。到 SSL/TLS → Origin Server 產生憑證，
    存到 `/etc/ssl/wedding-album/origin.pem` 與 `origin.key`。
-7. 放好 nginx 設定，`nginx -t` 通過後 `systemctl reload nginx`。
+7. 放好 nginx 設定，拿掉預設網站（`rm /etc/nginx/sites-enabled/default`），`nginx -t` 通過後 `systemctl reload nginx`。
+   用 `ss -tlnp | grep ':443 '` 確認有在 443 監聽：`nginx -t` 只檢查語法，沒 reload 的話跑的還是舊設定。
 8. `systemctl daemon-reload && systemctl enable --now wedding-album-api wedding-album-upload`。
    啟動前會先自動跑一次 `wedding-album-init`，建立資料表。
-9. 匯入婚紗照與祝福（見 backend/README.md），指令要以 `wedding` 身分、帶著同一份環境變數執行。
+9. 檢查：`bash deploy/smoke-test.sh https://網域 活動碼`，會實際上傳一張照片再刪掉。
+   上傳有沒有走到上傳池：`journalctl -u wedding-album-upload` 裡要有 `POST /api/photos`。
+10. 匯入婚紗照與祝福（見 backend/README.md），指令要以 `wedding` 身分、帶著同一份環境變數執行。
 
 ## 更新版本
 
@@ -55,6 +61,43 @@ systemctl restart wedding-album-api wedding-album-upload
 ```
 
 重啟上傳池時，進行中的上傳最多等 120 秒做完。但前端只要發現上傳失敗就會自動重送，同一個檔案也不會重複。
+
+## 在 Windows 上用 WSL 演練
+
+上 VPS 之前，先在本機的 WSL（Ubuntu 26.04，跟 VPS 同一版）把整套跑一遍。gunicorn 不支援 Windows，所以要在 Linux 裡測。
+測不到的只有 Cloudflare 本身（100 MB 上限、快取）與正式憑證。
+
+1. 系統管理員 PowerShell：`wsl --install --web-download --no-distribution`，裝完重開機。
+   Windows 內建的舊版 `wsl` 不認得 `--update`，清單裡也只有不帶版本的 `Ubuntu`，所以要先裝新版 WSL。
+2. `wsl --install -d Ubuntu-26.04`，設定使用者名稱與密碼（metrics 那題選什麼都可以）。
+3. 在 Ubuntu 裡：
+
+   ```bash
+   sudo apt update && sudo apt upgrade -y && sudo apt install -y python3-venv git
+   sudo mkdir -p /srv/wedding-album && sudo chown $USER:$USER /srv/wedding-album
+   git clone /mnt/d/Code/wedding-album /srv/wedding-album
+   cd /srv/wedding-album/backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+   .venv/bin/pytest -q
+   ```
+
+   - 從 D 槽的 repo 直接 clone，**只會拿到已經 commit 的內容**。之後更新用 `git pull`。
+   - clone 時出現 `detected dubious ownership`：先執行
+     `git config --global --add safe.directory /mnt/d/Code/wedding-album/.git`。
+   - repo 一定要放在 Linux 這邊（`/srv/...`），不要直接在 `/mnt/d/...` 底下跑：很慢，權限也會讓 nginx 讀不到照片。
+     WSL 跳出「在 Windows 磁碟上操作效能不佳」的提示，就是在說這件事。
+4. 接著照「第一次部署」的 2、4、5、7、8、9 步做（第 1 步只剩 nginx、nodejs、npm 要裝，apt 的 Node 22 就夠）。跟 VPS 不同的地方：
+   - 沒有 Cloudflare 的憑證，在同樣的路徑放自簽憑證，設定檔就不必改：
+
+     ```bash
+     sudo mkdir -p /etc/ssl/wedding-album && sudo openssl req -x509 -nodes -newkey rsa:2048 -days 30 -subj "/CN=localhost" \n         -keyout /etc/ssl/wedding-album/origin.key -out /etc/ssl/wedding-album/origin.pem
+     ```
+
+   - `deploy/` 底下改了還沒 commit 的檔案，可以直接從 `/mnt/d/Code/wedding-album/deploy/` 複製來試。
+   - 檢查腳本要加 `-k`（自簽憑證）：`bash deploy/smoke-test.sh https://localhost 活動碼 -k`。
+5. Windows 的瀏覽器打開 `https://localhost/?code=活動碼`（WSL 會把 port 轉到 Windows）。
+   自簽憑證會被警告，按「繼續前往」即可；Service Worker 遇到憑證錯誤不會註冊，離線與加到主畫面在本機測不到。
+6. 測重開機：PowerShell 執行 `wsl --shutdown`，重新打開 Ubuntu 後不做任何事，
+   `systemctl status nginx wedding-album-api wedding-album-upload` 三個都要是 active。
 
 ## 要注意的地方
 

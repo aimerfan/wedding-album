@@ -9,11 +9,13 @@ Group=wedding
 WorkingDirectory=/srv/wedding-album/backend
 EnvironmentFile=/etc/wedding-album/env
 # 請求都很快，30 秒沒回應就是卡住了。worker 數先抓 CPU 核心數 × 2，壓測後再調
+# --no-control-socket：用不到 gunicornc；預設的 socket 放在家目錄，wedding 沒有家目錄，兩個池也會搶同一個路徑
 ExecStart=/srv/wedding-album/backend/.venv/bin/gunicorn "app:create_app()" \
     --bind 127.0.0.1:8000 \
     --workers 4 \
     --timeout 30 \
-    --access-logfile -
+    --access-logfile - \
+    --no-control-socket
 Restart=always
 PrivateTmp=true
 
