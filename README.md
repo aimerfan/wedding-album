@@ -14,11 +14,12 @@ wedding-album/
 ├── deploy/     # 正式環境設定（nginx、systemd）── 見 deploy/README.md
 └── docs/
     ├── api.md  # API 規格（前後端共用）
+    ├── deploy.md # 部署準備的進度、決策與待辦
     └── design/ # 設計稿
 ```
 
 語言／工具鏈專屬的設定（`package.json`、`.nvmrc`、`.gitignore` …）一律留在子專案內。
-根目錄的 `.gitignore` 只處理環境變數與機密。
+根目錄的 `.gitignore` 只處理環境變數、機密與個人設定。
 
 ## 開發狀態
 
