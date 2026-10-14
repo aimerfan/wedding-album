@@ -1,0 +1,28 @@
+[Unit]
+Description=婚禮相簿：上傳（POST /api/photos）
+Requires=wedding-album-init.service
+After=network.target wedding-album-init.service
+
+[Service]
+User=wedding
+Group=wedding
+WorkingDirectory=/srv/wedding-album/backend
+EnvironmentFile=/etc/wedding-album/env
+# 檔案由 nginx 收完才交過來，worker 只花在處理上（HEIC 轉檔吃 CPU）。
+# worker 數就是同時處理幾個上傳，開太多會讓瀏覽那一池搶不到 CPU，壓測後再調。
+# --timeout：處理一個上傳最多幾秒；--graceful-timeout：重啟時等進行中的上傳做完。
+# --max-requests：處理一定數量後換新的 worker，避免影像處理的記憶體越用越多
+ExecStart=/srv/wedding-album/backend/.venv/bin/gunicorn "app:create_app()" \
+    --bind 127.0.0.1:8001 \
+    --workers 3 \
+    --timeout 120 \
+    --graceful-timeout 120 \
+    --max-requests 500 \
+    --max-requests-jitter 50 \
+    --access-logfile -
+Restart=always
+# Werkzeug 把收到的大檔案寫進 /tmp，每個服務各用自己的一份
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

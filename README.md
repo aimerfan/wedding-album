@@ -11,6 +11,7 @@
 wedding-album/
 ├── frontend/   # Vue 3 + TypeScript + Vite（PWA）── 見 frontend/README.md
 ├── backend/    # Python 3.14 + Flask ── 見 backend/README.md
+├── deploy/     # 正式環境設定（nginx、systemd）── 見 deploy/README.md
 └── docs/
     ├── api.md  # API 規格（前後端共用）
     └── design/ # 設計稿

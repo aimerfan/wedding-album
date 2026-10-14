@@ -1,0 +1,21 @@
+[Unit]
+Description=婚禮相簿：一般 API（瀏覽、讚、祝福…）
+Requires=wedding-album-init.service
+After=network.target wedding-album-init.service
+
+[Service]
+User=wedding
+Group=wedding
+WorkingDirectory=/srv/wedding-album/backend
+EnvironmentFile=/etc/wedding-album/env
+# 請求都很快，30 秒沒回應就是卡住了。worker 數先抓 CPU 核心數 × 2，壓測後再調
+ExecStart=/srv/wedding-album/backend/.venv/bin/gunicorn "app:create_app()" \
+    --bind 127.0.0.1:8000 \
+    --workers 4 \
+    --timeout 30 \
+    --access-logfile -
+Restart=always
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

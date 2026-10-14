@@ -1,0 +1,12 @@
+[Unit]
+Description=婚禮相簿：建立與補齊資料表
+# 兩個 gunicorn 池都 Requires 這個服務，啟動前會先跑完它一次。
+# 不然兩個池的 worker 同時啟動、同時建表，第一次部署或加欄位時可能互撞
+
+[Service]
+Type=oneshot
+User=wedding
+Group=wedding
+WorkingDirectory=/srv/wedding-album/backend
+EnvironmentFile=/etc/wedding-album/env
+ExecStart=/srv/wedding-album/backend/.venv/bin/python -c "from app import create_app; create_app()"

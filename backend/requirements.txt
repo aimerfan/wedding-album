@@ -20,3 +20,6 @@ pillow-heif==1.8.1
 
 # 影片：讀長度、尺寸、拍攝時間，抓一格當封面。內含 ffmpeg，主機不必另外安裝
 av==19.0.1
+
+# 正式環境的 WSGI 伺服器（只在 Linux 主機上用，Windows 跑不起來；開發用 flask run）
+gunicorn==26.2.0
