@@ -5,4 +5,4 @@ from flask import Blueprint
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 # 放在最後 import：各模組要用到上面的 bp
-from app.api import blessings, comments, config, guests, photos, wedding  # noqa: E402, F401
+from app.api import blessings, comments, config, guests, manifest, photos, wedding  # noqa: E402, F401
