@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ApiError } from '@/api/client'
-import { createTransferCode } from '@/api/guests'
+import { createTransferCode, createTransferCodeFor } from '@/api/guests'
 
 /**
  * 「在其他裝置繼續」：產生一條一次性連結，在別的瀏覽器或電腦打開就是同一位賓客。
  * 見 docs/api.md 的「換瀏覽器或換裝置」。
+ *
+ * 帶了 forGuest 就是管理員替那位賓客產生（他原本的裝置不見了），內容一樣，只是文案不同。
  */
+const props = defineProps<{ forGuest?: { id: string; nickname: string } }>()
 const open = defineModel<boolean>({ required: true })
 
 const link = ref('')
@@ -19,6 +22,10 @@ const loading = ref(false)
 const error = ref('')
 
 const canShare = typeof navigator !== 'undefined' && 'share' in navigator
+
+const title = computed(() =>
+  props.forGuest ? `幫「${props.forGuest.nickname}」找回身分` : '在其他裝置繼續',
+)
 
 const expiresLabel = computed(() => {
   const d = expiresAt.value
@@ -39,7 +46,9 @@ async function generate() {
   error.value = ''
   loading.value = true
   try {
-    const created = await createTransferCode()
+    const created = props.forGuest
+      ? await createTransferCodeFor(props.forGuest.id)
+      : await createTransferCode()
     code.value = created.code
     // 連結由前端組：前後端可能不同網域，後端不知道前端的網址
     link.value = `${window.location.origin}/continue?code=${created.code}`
@@ -106,10 +115,14 @@ async function share() {
 <template>
   <Transition name="sheet">
     <div v-if="open" class="overlay" @click.self="open = false">
-      <section class="sheet" role="dialog" aria-label="在其他裝置繼續">
+      <section class="sheet" role="dialog" :aria-label="title">
         <span class="grip" />
-        <h2>在其他裝置繼續</h2>
-        <p class="intro">
+        <h2>{{ title }}</h2>
+        <p v-if="forGuest" class="intro">
+          確認對方是「{{ forGuest.nickname }}」本人後，<br />
+          把連結或接續碼交給他，就能接回原本的身分。
+        </p>
+        <p v-else class="intro">
           想換瀏覽器，或回家用電腦上傳照片？<br />
           用下面任一種方式，就會延續你現在的身分。
         </p>
@@ -146,7 +159,11 @@ async function share() {
           </section>
 
           <p v-if="copyFailed" class="note warn">這支手機不能自動複製，請長按連結或接續碼手動複製</p>
-          <p class="note">{{ expiresLabel }} 前有效，只能使用一次。請不要傳給別人。</p>
+          <p class="note">
+            {{ expiresLabel }} 前有效，只能使用一次。{{
+              forGuest ? '拿到的人就會變成這位賓客，只交給本人。' : '請不要傳給別人。'
+            }}
+          </p>
         </template>
 
         <button class="close" type="button" @click="open = false">關閉</button>
