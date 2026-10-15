@@ -14,7 +14,7 @@ wedding-album/
 ├── deploy/     # 正式環境設定（nginx、systemd）── 見 deploy/README.md
 └── docs/
     ├── api.md  # API 規格（前後端共用）
-    ├── deploy/ # 部署準備的進度、決策與待辦（README.md）、架構審閱頁（architecture.html）
+    ├── deploy/ # 部署的計畫與選用理由（README.md）、架構審閱頁（architecture.html）
     └── design/ # 設計稿
 ```
 
@@ -29,7 +29,7 @@ wedding-album/
 - [x] 後端骨架（設定、錯誤格式、測試）
 - [x] API 規格與實作（[docs/api.md](docs/api.md)）
 - [x] 照片與影片上傳（去重、限流、截止上傳）
-- [ ] 部署（進度見 [docs/deploy.md](docs/deploy.md)）
+- [ ] 部署（2026-10-15 已上線，實機測試與彩排中；計畫見 [docs/deploy/README.md](docs/deploy/README.md)）
 
 ## Commit 訊息
 

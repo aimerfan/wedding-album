@@ -35,9 +35,25 @@ function write(key: string, value: string) {
 /**
  * 活動碼來自會場 QR code 的網址（?code=...），第一次打開時記下來，之後加入相簿要用。
  * 開發時沒有 QR code，用後端開發模式的預設值 "dev"。
+ * /admin?code= 是管理員代碼，不是活動碼，不能記下來。
+ *
+ * 還沒加入的人會被導到 /welcome?redirect=/?code=...，活動碼包在 redirect 裡。
+ * iPhone 加到主畫面時可能用的是這個網址，所以 redirect 裡的也要認得。
+ * 規則要跟 index.html 裡挑 manifest 的那段一致。
  */
+function codeFromUrl(path: string, search: string): string | null {
+  if (path === '/admin') return null
+  const params = new URLSearchParams(search)
+  const code = params.get('code')
+  if (code) return code
+  const redirect = params.get('redirect') ?? ''
+  if (!redirect.startsWith('/') || redirect.startsWith('//')) return null
+  const inner = new URL(redirect, window.location.origin)
+  return codeFromUrl(inner.pathname, inner.search)
+}
+
 function initialEventCode(): string {
-  const fromUrl = new URLSearchParams(window.location.search).get('code')
+  const fromUrl = codeFromUrl(window.location.pathname, window.location.search)
   if (fromUrl) {
     write(EVENT_CODE_KEY, fromUrl)
     return fromUrl
