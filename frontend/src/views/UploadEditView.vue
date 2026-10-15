@@ -26,6 +26,8 @@ const albumConfig = useAlbumConfig()
 const tagOptions: { id: PhotoTag; label: string }[] = [
   { id: 'engagement', label: '訂婚・迎娶' },
   { id: 'banquet', label: '宴客' },
+  { id: 'candid', label: '花絮' },
+  { id: 'throwback', label: '那些年' },
 ]
 
 const selected = computed(() =>

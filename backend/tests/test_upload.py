@@ -70,9 +70,10 @@ def test_uploaded_photo_shows_in_album(client, token):
     assert [p["id"] for p in items] == [photo_id]
 
 
-def test_upload_with_tag(client, token):
-    res = upload(client, token, make_image(), tag="engagement")
-    assert res.get_json()["tag"] == "engagement"
+@pytest.mark.parametrize("tag", ["engagement", "candid", "throwback"])
+def test_upload_with_tag(client, token, tag):
+    res = upload(client, token, make_image(), tag=tag)
+    assert res.get_json()["tag"] == tag
 
 
 def test_display_and_thumbnail_are_resized_jpegs(app, client, token):

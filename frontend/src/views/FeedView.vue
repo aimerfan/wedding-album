@@ -22,6 +22,8 @@ const chips: Chip[] = [
   { id: 'all', label: '全部', filter: {} },
   { id: 'engagement', label: '訂婚・迎娶', filter: { tag: 'engagement' } },
   { id: 'banquet', label: '宴客', filter: { tag: 'banquet' } },
+  { id: 'candid', label: '花絮', filter: { tag: 'candid' } },
+  { id: 'throwback', label: '那些年', filter: { tag: 'throwback' } },
   { id: 'video', label: '影片', filter: { kind: 'video' } },
 ]
 
