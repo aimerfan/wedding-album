@@ -369,9 +369,13 @@ function toggleFavorite() {
           </svg>
         </button>
         <div v-if="moreOpen" class="more-pop" role="menu">
-          <button type="button" role="menuitem" @click="startEdit">{{ editLabel }}</button>
+          <!-- 編輯說明與分類只在直式做：橫放時面板只剩資訊條，放不下編輯表單（見 <style>） -->
+          <button class="portrait-only" type="button" role="menuitem" @click="startEdit">
+            {{ editLabel }}
+          </button>
           <button
             v-if="!isMine && photo.caption"
+            class="portrait-only"
             type="button"
             role="menuitem"
             :disabled="saving"
@@ -977,8 +981,17 @@ function toggleFavorite() {
     display: none;
   }
 
+  /*
+   * 資訊條只留上傳者那一列和說明兩行。留言、編輯表單、「為這張說點什麼」都要轉回直式才看得到：
+   * 浮在照片上的資訊條放不下，也避免橫放時鍵盤把整個畫面蓋掉。
+   * .comments 是 PhotoComments 的根元素，scoped 樣式管得到子元件的根
+   */
   .grip,
-  .blessing-tag {
+  .comments,
+  .editor,
+  .caption-add,
+  .caption-edited,
+  .portrait-only {
     display: none;
   }
 
@@ -1004,14 +1017,14 @@ function toggleFavorite() {
     margin: 6px 0 0;
   }
 
-  /* 祝福只留兩行，完整的要轉回直式看 */
-  .blessing {
+  /* 說明只留兩行，完整的要轉回直式看 */
+  .caption {
     margin-top: 6px;
     padding: 0;
     background: transparent;
   }
 
-  .blessing-text {
+  .caption-text {
     font-size: 13px;
     line-height: 1.6;
     display: -webkit-box;
