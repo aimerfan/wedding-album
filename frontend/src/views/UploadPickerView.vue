@@ -6,9 +6,8 @@ import { useAlbumConfig } from '@/composables/useAlbumConfig'
 import { wedding } from '@/config/wedding'
 import {
   TOO_LARGE_HINT,
+  addPicked,
   describeMedia,
-  kindOf,
-  setPicked,
   sizeProblem,
   uploadFlow,
   type PickedMedia,
@@ -63,21 +62,17 @@ function openPicker() {
 
 function onFilesChosen(event: Event) {
   const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  setPicked(
-    files.map((file, i) => ({
-      id: i + '-' + file.name + '-' + file.lastModified,
-      file,
-      kind: kindOf(file),
-      previewUrl: URL.createObjectURL(file),
-    })),
-  )
-  // 預設全選太大的以外的，超過張數上限的部分不選
-  selectedIds.value = picked.value
-    .filter((p) => !isTooLarge(p))
-    .slice(0, wedding.maxUploadCount)
-    .map((p) => p.id)
+  const added = addPicked(Array.from(input.files ?? []))
   input.value = ''
+  // 新選的預設勾起來（太大的除外），接在原本已勾的後面；超過張數上限的部分不勾
+  const room = Math.max(wedding.maxUploadCount - selectedIds.value.length, 0)
+  selectedIds.value = [
+    ...selectedIds.value,
+    ...added
+      .filter((p) => !isTooLarge(p))
+      .slice(0, room)
+      .map((p) => p.id),
+  ]
 }
 
 function toggle(id: string) {

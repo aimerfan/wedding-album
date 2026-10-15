@@ -154,9 +154,29 @@ function revokePicked() {
   for (const p of uploadFlow.picked) URL.revokeObjectURL(p.previewUrl)
 }
 
-export function setPicked(items: PickedMedia[]) {
-  revokePicked()
-  uploadFlow.picked = items
+/** 每個選到的檔案一個 id。不用檔名：同一批裡可能有同名的檔案 */
+let pickedSeq = 0
+
+/**
+ * 不比 lastModified：有些手機每次叫出選取器都會重新產生檔案，同一張照片的時間會不一樣。
+ * 檔名與大小都相同的兩張不同照片幾乎不會出現
+ */
+function isSameFile(a: File, b: File) {
+  return a.name === b.name && a.size === b.size
+}
+
+/** 選取器選完（含「再選」）：接在已選的後面，同一個檔案選第二次就略過。回傳實際加進來的 */
+export function addPicked(files: File[]): PickedMedia[] {
+  const added = files
+    .filter((file) => !uploadFlow.picked.some((p) => isSameFile(p.file, file)))
+    .map((file) => ({
+      id: `m${++pickedSeq}`,
+      file,
+      kind: kindOf(file),
+      previewUrl: URL.createObjectURL(file),
+    }))
+  uploadFlow.picked = [...uploadFlow.picked, ...added]
+  return added
 }
 
 export function resetUploadFlow() {
