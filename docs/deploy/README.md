@@ -75,6 +75,8 @@
 
 ## 5. 實機測試與彩排 ⬜
 
+給其他人測的新功能清單見 [phone-test.md](phone-test.md)。
+
 正式憑證之後才測得到的（本機自簽憑證下 Service Worker 不會註冊）：
 
 **先做**
