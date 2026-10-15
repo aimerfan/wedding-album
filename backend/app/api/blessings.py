@@ -1,4 +1,4 @@
-"""祝福留言：留言牆，以及上傳照片時一起寫的祝福。"""
+"""祝福留言：留言牆。照片上的文字是照片說明（見 photos.py），不是祝福。"""
 
 from flask import current_app, g, jsonify, request
 
@@ -6,7 +6,7 @@ from app.api import bp
 from app.auth import require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import Blessing, Photo, now
+from app.models import Blessing, now
 from app.pagination import paginate
 
 
@@ -55,19 +55,8 @@ def list_blessings():
 @bp.post("/blessings")
 @require_guest
 def create_blessing():
-    body = _json_body()
-    text = _clean_text(body.get("text"))
-
-    photo_id = body.get("photoId")
-    if photo_id is not None:
-        photo = db.session.get(Photo, photo_id) if isinstance(photo_id, str) else None
-        if photo is None:
-            raise ApiError(404, "photo_not_found", "找不到這張照片")
-        # 照片上的祝福顯示在上傳者名字下方，看起來就是上傳者說的，所以只有上傳者自己能掛
-        if photo.uploader_id != g.guest.id:
-            raise ApiError(403, "not_your_photo", "只能在自己上傳的照片附上祝福")
-
-    blessing = Blessing(guest_id=g.guest.id, text=text, photo_id=photo_id)
+    text = _clean_text(_json_body().get("text"))
+    blessing = Blessing(guest_id=g.guest.id, text=text)
     db.session.add(blessing)
     db.session.commit()
     return jsonify(blessing.to_json()), 201
@@ -76,7 +65,7 @@ def create_blessing():
 @bp.patch("/blessings/<blessing_id>")
 @require_guest
 def update_blessing(blessing_id: str):
-    """修改內容。只改文字，不能換掛的照片。"""
+    """修改內容，只能改文字。"""
     blessing = _my_blessing(blessing_id)
     text = _clean_text(_json_body().get("text"))
     if text != blessing.text:

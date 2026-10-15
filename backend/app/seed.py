@@ -15,7 +15,7 @@ from PIL import Image, ImageChops
 from app import images, storage
 from app.auth import issue_token
 from app.db import db
-from app.models import Blessing, Guest, Like, Photo, WeddingPhoto, now
+from app.models import Blessing, Comment, Guest, Like, Photo, WeddingPhoto, now
 
 # (暱稱, 與新人的關係)
 GUESTS = [
@@ -45,12 +45,25 @@ PHOTOS = [
     (1, 3, 2, "banquet"),
 ]
 
-# (作者在 GUESTS 的位置, 祝福, 掛在第幾張照片上或 None)。照片必須是作者自己上傳的
+# 照片說明：{第幾張照片: 說明}，說明是上傳者寫的
+CAPTIONS = {
+    1: "俊鴻是我大學最好的兄弟，一路看著他追到鈺婷。今天看到你們穿上禮服，眼淚差點掉下來。祝你們白頭偕老！",
+    7: "新娘進場的那一刻 ♥",
+}
+
+# (作者在 GUESTS 的位置, 祝福)
 BLESSINGS = [
-    (1, "俊鴻是我大學最好的兄弟，一路看著他追到鈺婷。今天看到你們穿上禮服，眼淚差點掉下來。祝你們白頭偕老！", 1),
-    (4, "從小看著婷婷長大，今天看到她當新娘真的好美。願你們的婚姻甜甜蜜蜜，早生貴子。", None),
-    (3, "恭喜恭喜！", None),
-    (6, "兩個人在一起的樣子真好看。 ♥", None),
+    (4, "從小看著婷婷長大，今天看到她當新娘真的好美。願你們的婚姻甜甜蜜蜜，早生貴子。"),
+    (3, "恭喜恭喜！"),
+    (6, "兩個人在一起的樣子真好看。 ♥"),
+]
+
+# (留言的人在 GUESTS 的位置, 第幾張照片, 留言)。順序就是留言的先後
+COMMENTS = [
+    (0, 1, "哈哈哈這張拍得好！"),
+    (4, 1, "兩個人好登對 ♥"),
+    (1, 1, "謝謝大家～"),
+    (2, 6, "這道菜超好吃"),
 ]
 
 # (按讚的人在 GUESTS 的位置, 第幾張照片)
@@ -127,6 +140,7 @@ def seed_command(reset: bool):
         photo = Photo(
             uploader=guests[guest_index],
             tag=tag,
+            caption=CAPTIONS.get(i),
             width=width,
             height=height,
             uploaded_at=started + timedelta(minutes=10 * i),
@@ -145,14 +159,23 @@ def seed_command(reset: bool):
         storage.save(photo.original_key, images.to_jpeg(image))
         storage.save(photo.thumb_key, images.make_thumbnail(image))
 
-    for i, (guest_index, text, photo_index) in enumerate(BLESSINGS):
+    for i, (guest_index, text) in enumerate(BLESSINGS):
         db.session.add(
             Blessing(
                 guest=guests[guest_index],
                 text=text,
-                photo_id=photos[photo_index].id if photo_index is not None else None,
                 # 第一則最新
                 created_at=now() - timedelta(minutes=5 * i),
+            )
+        )
+    for i, (guest_index, photo_index, text) in enumerate(COMMENTS):
+        db.session.add(
+            Comment(
+                guest=guests[guest_index],
+                photo_id=photos[photo_index].id,
+                text=text,
+                # 最後一則最新
+                created_at=now() - timedelta(minutes=len(COMMENTS) - i),
             )
         )
     for guest_index, photo_index in LIKES:
@@ -180,6 +203,7 @@ def seed_command(reset: bool):
 
     click.echo(
         f"建立了 {len(guests)} 位賓客、{len(PHOTOS)} 張照片、{len(BLESSINGS)} 則祝福、"
+        f"{len(COMMENTS)} 則留言、"
         f"{len(LIKES)} 個讚、{len(WEDDING)} 張婚紗照。"
     )
     click.echo(f"照片檔在 {storage.media_dir()}")

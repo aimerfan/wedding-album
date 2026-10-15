@@ -45,7 +45,7 @@ onMounted(async () => {
       <p class="text">
         「{{ session.nickname }}」已經是管理員了。<br />
         在照片右上角的「⋯」、祝福右上角的「⋯」<br />
-        可以刪除不適當的照片與祝福。
+        可以刪除不適當的照片、照片上的文字與祝福。
       </p>
       <button class="primary" type="button" @click="router.replace({ name: 'feed' })">
         回相簿

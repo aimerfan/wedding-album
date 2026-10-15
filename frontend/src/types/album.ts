@@ -5,6 +5,7 @@
 export type GuestId = string
 export type PhotoId = string
 export type BlessingId = string
+export type CommentId = string
 
 /** 賓客。這個 app 不做帳號密碼，賓客只留暱稱。 */
 export interface Guest {
@@ -40,13 +41,17 @@ export interface Photo {
   uploadedAt: string
   /** ISO 8601，EXIF 取得，可能沒有 */
   takenAt?: string | null
-  /** 上傳時附的祝福語 */
-  blessing?: string | null
   likeCount: number
+  /** 照片下的留言數 */
+  commentCount: number
   /** 目前這位賓客按過讚沒 */
   likedByMe: boolean
   favoritedByMe: boolean
   tag: PhotoTag
+  /** 上傳者對這張照片的說明，選填 */
+  caption: string | null
+  /** 說明最後一次修改的時間，沒改過是 null。用來標示「已編輯」 */
+  captionEditedAt: string | null
 }
 
 /** 列表類 API 的分頁回應，見 docs/api.md 的「分頁」 */
@@ -55,7 +60,19 @@ export interface Page<T> {
   nextCursor: string | null
 }
 
-/** 祝福留言。附在照片上的會帶 photoId，留言牆上的獨立留言則沒有。 */
+/** 照片下的留言。任何賓客都能留；照片上的文字（caption）是上傳者寫的，不是留言 */
+export interface Comment {
+  id: CommentId
+  photoId: PhotoId
+  guest: Guest
+  text: string
+  /** ISO 8601 */
+  createdAt: string
+  /** 最後一次修改的時間，沒改過是 null。用來標示「已編輯」 */
+  editedAt: string | null
+}
+
+/** 留言牆上的祝福。照片上的文字是 Photo.caption，不是祝福 */
 export interface Blessing {
   id: BlessingId
   guest: Guest
@@ -64,7 +81,6 @@ export interface Blessing {
   createdAt: string
   /** 最後一次修改的時間，沒改過是 null。用來標示「已編輯」 */
   editedAt?: string | null
-  photoId?: PhotoId | null
 }
 
 /**
@@ -81,7 +97,7 @@ export interface WeddingPhoto {
 
 /** PhotoTile 顯示一張圖需要的欄位，賓客照片與婚紗照都符合。影片會多一個角標 */
 export type TileImage = Pick<Photo, 'displayUrl' | 'thumbnailUrl'> &
-  Partial<Pick<Photo, 'kind' | 'durationSeconds'>> & { blessing?: string | null }
+  Partial<Pick<Photo, 'kind' | 'durationSeconds' | 'caption'>>
 
 /** 首頁頂部的統計數字 */
 export interface AlbumStats {
@@ -105,9 +121,12 @@ export interface UploadTask {
   photoId?: PhotoId
 }
 
-/** 上傳流程第二步（寫祝福）收集到的設定 */
+/** 上傳流程第二步（分類與說明）收集到的設定。key 都是 PickedMedia.id */
 export interface UploadDraft {
-  blessing: string
-  /** 這批照片是哪個環節拍的。多數賓客只參加宴客，預設 'banquet' */
+  /** 這批照片預設是哪個環節拍的。多數賓客只參加宴客，預設 'banquet' */
   tag: PhotoTag
+  /** 個別改過分類的；沒有的就跟著預設 */
+  tags: Record<string, PhotoTag>
+  /** 每張的說明，選填 */
+  captions: Record<string, string>
 }

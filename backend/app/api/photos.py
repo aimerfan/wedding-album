@@ -16,6 +16,7 @@ from app.models import (
     PHOTO_TAGS,
     TAIPEI,
     Blessing,
+    Comment,
     Favorite,
     Guest,
     Like,
@@ -91,7 +92,8 @@ def _too_large(limit: int, what: str) -> ApiError:
 @bp.post("/photos")
 @require_guest
 def upload_photo():
-    """上傳一張照片或一支影片。multipart/form-data，欄位 file（必填）、tag（選填，預設 banquet）。
+    """上傳一張照片或一支影片。multipart/form-data，欄位 file（必填）、tag（選填，預設 banquet）、
+    caption（選填，照片說明）。
 
     是照片還是影片看檔案內容判斷，副檔名、Content-Type 都不採信。
     同一位賓客傳了一模一樣的檔案，回傳已經有的那張（200），不會變成兩張。
@@ -104,15 +106,15 @@ def upload_photo():
     if file is None or not file.filename:
         raise ApiError(400, "file_required", "請選擇要上傳的照片或影片")
 
-    tag = request.form.get("tag") or "banquet"
-    if tag not in PHOTO_TAGS:
-        raise ApiError(400, "invalid_tag", "照片分類不正確")
+    tag = _clean_tag(request.form.get("tag") or "banquet")
+    caption = _clean_caption(request.form.get("caption"))
 
     # 檔案已經在 Werkzeug 的暫存檔裡，先看大小，超過就不必讀進記憶體
     stream = file.stream
     size = _file_size(stream)
 
     # 逾時後重送、或不小心選了同一張：直接回傳之前那張。放在每小時上限之前，重送不該算成多傳
+    # 已經有的那張不套用這次的分類與說明：重送時第一次就已經存好了，要改請用 PATCH
     content_hash = _sha256(stream)
     if existing := _find_duplicate(content_hash):
         return jsonify(existing.to_json(g.guest.id)), 200
@@ -150,8 +152,29 @@ def upload_photo():
 
         kind = "photo"
 
-    photo, created = _store(kind, tag, processed, content_hash, save_original)
+    photo, created = _store(kind, tag, caption, processed, content_hash, save_original)
     return jsonify(photo.to_json(g.guest.id)), 201 if created else 200
+
+
+def _clean_tag(raw: object) -> str:
+    if raw not in PHOTO_TAGS:
+        raise ApiError(400, "invalid_tag", "照片分類不正確")
+    return raw
+
+
+def _clean_caption(raw: object) -> str | None:
+    """說明是選填的：沒帶、空字串、只有空白都當成沒有說明。"""
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ApiError(400, "invalid_caption", "說明必須是文字")
+    text = raw.strip()
+    if not text:
+        return None
+    limit = current_app.config["MAX_CAPTION_LENGTH"]
+    if len(text) > limit:
+        raise ApiError(400, "caption_too_long", f"說明最多 {limit} 個字")
+    return text
 
 
 def _sha256(stream) -> str:
@@ -191,7 +214,9 @@ def _process_video(stream) -> videos.ProcessedVideo:
     return processed
 
 
-def _store(kind: str, tag: str, processed, content_hash: str, save_original) -> tuple[Photo, bool]:
+def _store(
+    kind: str, tag: str, caption: str | None, processed, content_hash: str, save_original
+) -> tuple[Photo, bool]:
     """存檔案、寫資料庫，回傳 (照片, 是不是新建的)。
 
     先存檔案再寫資料庫：SQLite 寫入時整個資料庫會鎖住，這樣只鎖寫一筆資料的那一下，
@@ -204,6 +229,7 @@ def _store(kind: str, tag: str, processed, content_hash: str, save_original) -> 
         uploader_id=g.guest.id,
         kind=kind,
         tag=tag,
+        caption=caption,
         width=processed.width,
         height=processed.height,
         taken_at=processed.taken_at,
@@ -265,12 +291,45 @@ def get_photo(photo_id: str):
     return jsonify(_get_photo_or_404(photo_id).to_json(g.guest.id))
 
 
+@bp.patch("/photos/<photo_id>")
+@require_guest
+def update_photo(photo_id: str):
+    """修改分類或說明，沒帶的欄位不變。截止上傳後也可以改：截止只是不再收新的檔案。
+
+    分類：上傳者與管理員都能改（管理員幫忙整理分錯的照片）。
+    說明：只有上傳者能寫；管理員只能刪掉（傳 null），不能改成別的內容，免得變成別人替上傳者說話。
+    """
+    photo = _get_photo_or_404(photo_id)
+    is_mine = photo.uploader_id == g.guest.id
+    if not is_mine and not g.guest.is_admin:
+        raise ApiError(403, "not_your_photo", "只能修改自己上傳的照片")
+
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        raise ApiError(400, "invalid_body", "請求內容必須是 JSON 物件")
+
+    if "tag" in body:
+        photo.tag = _clean_tag(body["tag"])
+
+    if "caption" in body:
+        caption = _clean_caption(body["caption"])
+        if caption is not None and not is_mine:
+            raise ApiError(403, "not_your_photo", "只有上傳者可以寫照片說明")
+        if caption != photo.caption:
+            photo.caption = caption
+            # 刪掉說明就不再有「已編輯」；之後重寫一則也算編輯過
+            photo.caption_edited_at = now() if caption is not None else None
+
+    db.session.commit()
+    return jsonify(photo.to_json(g.guest.id))
+
+
 @bp.delete("/photos/<photo_id>")
 @require_guest
 def delete_photo(photo_id: str):
     """刪除照片。上傳者可以刪自己的；管理員可以刪任何一張（例如不適當的照片）。
 
-    讚、收藏一併刪掉。照片上的祝福留在留言牆，只是不再掛在照片上：照片不當不代表祝福也有問題。
+    讚、收藏、說明、留言一併刪掉。
     """
     photo = _get_photo_or_404(photo_id)
     if photo.uploader_id != g.guest.id and not g.guest.is_admin:
@@ -279,9 +338,7 @@ def delete_photo(photo_id: str):
     keys = [photo.original_key, photo.display_key, photo.thumb_key]
     db.session.execute(db.delete(Like).where(Like.photo_id == photo.id))
     db.session.execute(db.delete(Favorite).where(Favorite.photo_id == photo.id))
-    db.session.execute(
-        db.update(Blessing).where(Blessing.photo_id == photo.id).values(photo_id=None)
-    )
+    db.session.execute(db.delete(Comment).where(Comment.photo_id == photo.id))
     db.session.delete(photo)
     db.session.commit()
     # 資料庫刪成功之後才刪檔案；反過來的話，萬一資料庫失敗會留下一張打不開的照片

@@ -11,6 +11,8 @@ export interface AlbumConfig {
   /** 同時傳幾支影片。影片動輒上百 MB，預設一次一支 */
   videoUploadConcurrency: number
   maxBlessingLength: number
+  maxCaptionLength: number
+  maxCommentLength: number
   uploadsOpen: boolean
   /** 管理員設定的 Kahoot! 連結，沒設是 null */
   kahootUrl: string | null

@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { createBlessing, updateBlessing } from '@/api/blessings'
 import { ApiError } from '@/api/client'
+import MarkPicker from '@/components/MarkPicker.vue'
 import { useAlbumConfig } from '@/composables/useAlbumConfig'
 import { addBlessing, replaceBlessing } from '@/stores/blessingLists'
 import { session } from '@/stores/session'
@@ -100,6 +101,7 @@ async function send() {
         <p v-if="sendError" class="send-error" role="alert">{{ sendError }}</p>
 
         <div class="sheet-foot">
+          <MarkPicker v-model="draft" :target="draftEl" :max-length="config.maxBlessingLength" />
           <span class="counter">{{ draft.length }} / {{ config.maxBlessingLength }}</span>
           <button class="send" type="submit" :disabled="!canSend">
             {{ sending ? '送 出 中 …' : editing ? '儲 存' : '送 出' }}
@@ -218,6 +220,8 @@ async function send() {
 }
 
 .counter {
+  margin-left: auto;
+  margin-right: 16px;
   font-size: 10px;
   color: var(--c-ink-mute);
 }

@@ -8,16 +8,24 @@ import { session } from '@/stores/session'
 import type { Photo, PhotoTag } from '@/types/album'
 import { ApiError, toApiError } from './client'
 
+/** 跟著檔案一起送的欄位，每張各自一份 */
+export interface UploadMeta {
+  tag: PhotoTag
+  /** 選填，空字串就是沒有說明 */
+  caption: string
+}
+
 export function uploadPhoto(
   file: File,
-  tag: PhotoTag,
+  meta: UploadMeta,
   /** 0–100 */
   onProgress: (percent: number) => void,
 ): Promise<Photo> {
   return new Promise((resolve, reject) => {
     const form = new FormData()
     form.append('file', file)
-    form.append('tag', tag)
+    form.append('tag', meta.tag)
+    if (meta.caption.trim()) form.append('caption', meta.caption.trim())
 
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/photos')
@@ -51,14 +59,14 @@ function isRetryable(e: unknown) {
  */
 export async function uploadWithRetry(
   file: File,
-  tag: PhotoTag,
+  meta: UploadMeta,
   onProgress: (percent: number) => void,
   /** 要開始第幾次重試時通知，畫面可以顯示「重新上傳中」 */
   onRetry: (attempt: number) => void,
 ): Promise<Photo> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await uploadPhoto(file, tag, onProgress)
+      return await uploadPhoto(file, meta, onProgress)
     } catch (e) {
       const delay = RETRY_DELAYS_MS[attempt]
       if (delay === undefined || !isRetryable(e)) throw e

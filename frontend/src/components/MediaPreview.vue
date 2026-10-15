@@ -2,7 +2,7 @@
 import type { PickedMedia } from '@/stores/session'
 
 /**
- * 選到的檔案還沒上傳前的預覽（選擇頁、祝福頁共用）。
+ * 選到的檔案還沒上傳前的預覽（選擇頁、上傳頁共用）。
  * 影片用 <video> 顯示第一格：網址加 #t=0.1，iPhone 才會畫出畫面，不然是一片黑。
  */
 defineProps<{ item: PickedMedia }>()

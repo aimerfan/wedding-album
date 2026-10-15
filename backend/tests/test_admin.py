@@ -3,7 +3,7 @@ import os
 import pytest
 
 from app.db import db
-from app.models import Blessing, Favorite, Like
+from app.models import Favorite, Like
 from tests.conftest import auth
 
 
@@ -99,20 +99,16 @@ def test_admin_can_delete_any_photo(client, people):
     assert res.status_code == 204
 
 
-def test_delete_removes_likes_favorites_and_keeps_blessing(app, client, people):
+def test_delete_removes_likes_and_favorites(app, client, people):
     photo = people["photo"]
     client.put(f"/api/photos/{photo}/like", headers=auth(people["kai"]))
     client.put(f"/api/photos/{photo}/favorite", headers=auth(people["kai"]))
-    client.post("/api/blessings", headers=auth(people["hui"]), json={"text": "祝福", "photoId": photo})
 
     client.delete(f"/api/photos/{photo}", headers=auth(people["hui"]))
 
     with app.app_context():
         assert db.session.query(Like).count() == 0
         assert db.session.query(Favorite).count() == 0
-        # 祝福留在留言牆，只是不再掛在照片上
-        blessing = db.session.query(Blessing).one()
-        assert blessing.photo_id is None
     assert client.get("/api/me", headers=auth(people["kai"])).get_json()["stats"]["favorited"] == 0
 
 

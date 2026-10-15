@@ -139,12 +139,18 @@ export function invalidateAll() {
 }
 
 /**
- * 某張照片變了（按讚、收藏），把每一串列表裡的那張都換成新的，回到列表時數字才對。
+ * 某張照片變了（按讚、收藏、改分類或說明），把每一串列表裡的那張都換成新的，回到列表時數字才對。
  *
- * 收藏的列表要增減照片，但不在這裡立刻動：從「收藏」點進照片詳情後取消收藏，
- * 正在看的那張突然消失會很怪。所以只標記成過時，回到收藏頁時再重新載入。
+ * 收藏、分類的列表要增減照片，但不在這裡立刻動：從「收藏」點進照片詳情後取消收藏，
+ * 正在看的那張突然消失會很怪。所以只標記成過時，回到列表時再重新載入。
  */
 export function updatePhoto(photo: Photo) {
+  const before = [...lists.values()]
+    .flatMap(({ state }) => state.items)
+    .find((p) => p.id === photo.id)
+  if (before && before.tag !== photo.tag) {
+    for (const [key, { state }] of lists) if (key.includes('tag=')) state.stale = true
+  }
   for (const [key, { state }] of lists) {
     const i = state.items.findIndex((p) => p.id === photo.id)
     if (i >= 0) {
