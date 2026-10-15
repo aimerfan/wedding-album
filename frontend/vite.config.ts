@@ -12,7 +12,10 @@ export default defineConfig({
       // 讓 Service Worker 在 dev 也能跑，方便在手機上驗證安裝流程
       devOptions: { enabled: true, type: 'module' },
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
+      // 有活動碼時，index.html 會改用後端的 /api/manifest（start_url 帶活動碼），兩邊內容要一致
       manifest: {
+        // 固定 id：start_url 帶不帶活動碼，都是同一個 app
+        id: '/',
         name: '婚禮相簿',
         short_name: '婚禮相簿',
         description: '婚禮相片分享相簿',

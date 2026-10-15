@@ -35,9 +35,13 @@ function write(key: string, value: string) {
 /**
  * 活動碼來自會場 QR code 的網址（?code=...），第一次打開時記下來，之後加入相簿要用。
  * 開發時沒有 QR code，用後端開發模式的預設值 "dev"。
+ * /admin?code= 是管理員代碼，不是活動碼，不能記下來。
  */
 function initialEventCode(): string {
-  const fromUrl = new URLSearchParams(window.location.search).get('code')
+  const fromUrl =
+    window.location.pathname === '/admin'
+      ? null
+      : new URLSearchParams(window.location.search).get('code')
   if (fromUrl) {
     write(EVENT_CODE_KEY, fromUrl)
     return fromUrl

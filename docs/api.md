@@ -376,6 +376,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | 方法 | 路徑 | 需要 token | 用途 |
 | --- | --- | --- | --- |
 | `GET` | `/api/config` | ✗ | 前端要遵守的各種上限，以及管理員設定的 Kahoot! 連結 |
+| `GET` | `/api/manifest?code=<活動碼>` | ✗ | PWA 的 manifest，活動碼正確時 `start_url` 帶上 `?code=` |
 | `GET` | `/api/settings/kahoot` | ✓（管理員） | 目前存的 Kahoot! 連結與開關 |
 | `PUT` | `/api/settings/kahoot` | ✓（管理員） | 設定 Kahoot! 連結與開關 |
 
@@ -398,6 +399,10 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 不必重新部署前端，賓客重新整理頁面就會套用。
 
 `uploadsOpen` 為 `false` 時代表相簿已截止上傳，前端隱藏上傳按鈕，`POST /api/photos` 回 `403`。
+
+`/api/manifest`：iPhone 從主畫面打開時，網址就是 manifest 的 `start_url`，而且主畫面 app 讀不到 Safari 存下的活動碼。
+前端有活動碼時改用這份 manifest，從主畫面打開也能加入相簿。活動碼錯誤或沒帶時 `start_url` 是 `/`，
+其他內容跟前端的靜態 manifest 一樣。
 
 **Kahoot! 連結**：遊戲的 PIN 碼可能提早拿到、也可能到主持人開始遊戲時才知道，所以不寫在前端、也不放環境變數，
 由**管理員在 app 裡設定**。連結和開關分開：連結可以先存好，**開關打開**後所有人（包括還沒加入的歡迎頁）才會透過
