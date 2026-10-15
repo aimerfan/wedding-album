@@ -1,12 +1,17 @@
 <script lang="ts">
 import { ref } from 'vue'
 
-// 放在元件外面：從照片詳情返回首頁時，仍停在原本選的分類
+// 放在元件外面：從照片詳情返回首頁時，仍停在原本選的分類與搜尋
 const activeChip = ref('all')
+const searchOpen = ref(false)
+/** 輸入框裡的字 */
+const searchText = ref('')
+/** 實際拿去搜尋的字：停止輸入一下才更新，不必每打一個字就問一次後端 */
+const searchQuery = ref('')
 </script>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { fetchStats, type PhotoFilter } from '@/api/photos'
 import PhotoTile from '@/components/PhotoTile.vue'
@@ -27,8 +32,51 @@ const chips: Chip[] = [
   { id: 'video', label: '影片', filter: { kind: 'video' } },
 ]
 
-const filter = computed(() => chips.find((c) => c.id === activeChip.value)!.filter)
+/** 分類與搜尋可以合併，例如「影片」＋「小慧」 */
+const filter = computed<PhotoFilter>(() => {
+  const chip = chips.find((c) => c.id === activeChip.value)!.filter
+  return searchQuery.value ? { ...chip, q: searchQuery.value } : chip
+})
 const list = computed(() => getPhotoList(filter.value))
+
+// --- 搜尋：比對上傳者的暱稱與「與新人的關係」（GET /api/photos?q=） ---------
+
+const searchInput = ref<HTMLInputElement>()
+let debounce: ReturnType<typeof setTimeout> | undefined
+
+watch(searchText, (text) => {
+  clearTimeout(debounce)
+  debounce = setTimeout(() => (searchQuery.value = text.trim()), 300)
+})
+onBeforeUnmount(() => clearTimeout(debounce))
+
+// 換了搜尋字或分類就載入那一串（已經載過的直接用快取）
+watch(filter, (f) => ensureLoaded(f))
+
+async function openSearch() {
+  searchOpen.value = true
+  await nextTick()
+  searchInput.value?.focus()
+}
+
+/** 按 Enter 不等了，馬上搜尋，並收起鍵盤看結果 */
+function submitSearch() {
+  clearTimeout(debounce)
+  searchQuery.value = searchText.value.trim()
+  searchInput.value?.blur()
+}
+
+function closeSearch() {
+  clearTimeout(debounce)
+  searchText.value = ''
+  searchQuery.value = ''
+  searchOpen.value = false
+}
+
+const emptyMessage = computed(() => {
+  if (searchQuery.value) return `找不到「${searchQuery.value}」上傳的照片`
+  return activeChip.value === 'all' ? '還沒有照片，成為第一個分享回憶的人吧' : '這個分類還沒有照片'
+})
 
 // 兩欄瀑布流：依序左右分配。載入下一頁時只往後加，已經排好的不會跳動
 const columnA = computed(() => list.value.items.filter((_, i) => i % 2 === 0))
@@ -38,7 +86,6 @@ const stats = ref<AlbumStats | null>(null)
 
 function select(chip: Chip) {
   activeChip.value = chip.id
-  ensureLoaded(chip.filter)
 }
 
 async function more() {
@@ -82,7 +129,54 @@ function ratioOf(p: { width: number; height: number }) {
             共 {{ stats.photoCount }} 張回憶 · {{ stats.guestCount }} 位賓客
           </p>
         </div>
+        <button
+          v-if="!searchOpen"
+          class="search-toggle"
+          type="button"
+          aria-label="搜尋上傳者"
+          @click="openSearch"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+          >
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="M16 16l4.5 4.5" />
+          </svg>
+        </button>
       </div>
+
+      <form v-if="searchOpen" class="search" role="search" @submit.prevent="submitSearch">
+        <svg
+          class="search-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        >
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="M16 16l4.5 4.5" />
+        </svg>
+        <input
+          ref="searchInput"
+          v-model="searchText"
+          class="search-input"
+          type="search"
+          enterkeyhint="search"
+          maxlength="30"
+          placeholder="搜尋上傳者的名字或關係"
+          aria-label="搜尋上傳者的名字或關係"
+        />
+        <button class="search-close" type="button" aria-label="關閉搜尋" @click="closeSearch">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </form>
 
       <div class="chips">
         <button
@@ -129,9 +223,7 @@ function ratioOf(p: { width: number; height: number }) {
       </div>
     </div>
 
-    <p v-if="list.loaded && list.items.length === 0" class="status">
-      {{ activeChip === 'all' ? '還沒有照片，成為第一個分享回憶的人吧' : '這個分類還沒有照片' }}
-    </p>
+    <p v-if="list.loaded && list.items.length === 0" class="status">{{ emptyMessage }}</p>
     <p v-else-if="list.error" class="status">
       {{ list.error }}
       <button class="retry" type="button" @click="retry">重試</button>
@@ -208,6 +300,78 @@ function ratioOf(p: { width: number; height: number }) {
   font-size: 11px;
   letter-spacing: 1px;
   color: var(--c-ink-mute);
+}
+
+.search-toggle {
+  width: 36px;
+  height: 36px;
+  margin-top: 4px;
+  border: 1px solid var(--c-line);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--c-ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.search {
+  margin-top: 14px;
+  height: 40px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 20px;
+  background: var(--c-card);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--c-ink-mute);
+}
+
+/* 字體至少 16px：iPhone 對焦輸入框時才不會自動把畫面放大 */
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  color: var(--c-ink);
+  outline: none;
+}
+
+/* 自己有關閉鈕，不要瀏覽器內建的清除鈕 */
+.search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--c-ink-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-close svg {
+  width: 14px;
+  height: 14px;
 }
 
 

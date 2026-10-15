@@ -115,6 +115,8 @@ export function filterFromQuery(query: Record<string, unknown>): PhotoFilter {
   const uploader = pick('uploader')
   if (uploader) filter.uploader = uploader
   if (pick('favorited') === 'true') filter.favorited = 'true'
+  const q = pick('q')?.trim()
+  if (q) filter.q = q
   return filter
 }
 
