@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { fetchConfig } from '@/api/config'
 import { uploadWithRetry } from '@/api/upload'
 import MarkPicker from '@/components/MarkPicker.vue'
+import AppToast, { type Toast } from '@/components/AppToast.vue'
+import MediaLightbox from '@/components/MediaLightbox.vue'
 import MediaPreview from '@/components/MediaPreview.vue'
 import { FALLBACK, useAlbumConfig } from '@/composables/useAlbumConfig'
 import { PHOTO_TAGS } from '@/config/photoTags'
@@ -12,12 +14,16 @@ import { invalidateAll } from '@/stores/photoLists'
 import { wedding } from '@/config/wedding'
 import {
   describeMedia,
+  discardRemoved,
   finishBatch,
+  removePicked,
   resetUploadFlow,
+  restoreRemoved,
   sizeProblem,
   session,
   uploadFlow,
   type PickedMedia,
+  type RemovedPick,
 } from '@/stores/session'
 import type { PhotoTag, UploadStatus } from '@/types/album'
 
@@ -61,6 +67,55 @@ function startTyping(item: PickedMedia, event: FocusEvent) {
   typingId.value = item.id
   typingEl.value = event.target as HTMLTextAreaElement
 }
+
+// --- 放大看、拿掉選錯的 ---------------------------------------------------
+
+/** 正在放大看的那一張 */
+const zoomed = ref<PickedMedia | null>(null)
+
+// 拿掉不跳確認（選錯好幾張時每張都要多按一次很煩），改成幾秒內可以「復原」
+
+const toast = ref<Toast | null>(null)
+let toastTimer = 0
+/** 剛拿掉的那一個，提示還在時可以放回去。連續拿掉時只能復原最後一個 */
+let removed: RemovedPick | null = null
+
+function remove(item: PickedMedia) {
+  // 先收掉上一個提示（上一個就不能復原了），再拿掉這一個：順序反過來的話，
+  // 拿掉最後一個時 hideToast 會以為全部拿光了而直接回選取頁
+  hideToast()
+  const snapshot = removePicked(item.id)
+  if (!snapshot) return
+  if (typingId.value === item.id) typingId.value = ''
+  removed = snapshot
+  const what = item.kind === 'video' ? '1 支影片' : '1 張照片'
+  toast.value = { text: `已拿掉 ${what}`, action: { label: '復原', run: undo } }
+  toastTimer = window.setTimeout(hideToast, 5000)
+}
+
+function undo() {
+  if (!removed) return
+  restoreRemoved(removed)
+  removed = null
+  hideToast()
+}
+
+function hideToast() {
+  window.clearTimeout(toastTimer)
+  toast.value = null
+  // 提示消失就不能復原了，預覽可以回收
+  if (removed) discardRemoved(removed)
+  removed = null
+  // 全部拿掉了（又沒有復原）就回選取頁重選，不要停在一個空的頁面
+  if (uploadFlow.selectedIds.length === 0 && !leaving) router.back()
+}
+
+/** 離開這頁時只回收，不要再導頁 */
+let leaving = false
+onBeforeUnmount(() => {
+  leaving = true
+  hideToast()
+})
 
 /** 跟預設不同的有幾張，提示賓客「換預設不會動到這些」 */
 const customTagCount = computed(() => selected.value.filter((p) => p.id in uploadFlow.draft.tags).length)
@@ -295,7 +350,12 @@ onBeforeRouteLeave(() => {
       <p class="items-label">{{ summary }} · 將公開分享</p>
       <ul class="item-list">
         <li v-for="item in selected" :key="item.id" class="item">
-          <div class="thumb">
+          <button
+            class="thumb"
+            type="button"
+            :aria-label="item.kind === 'video' ? '放大看這支影片' : '放大看這張照片'"
+            @click="zoomed = item"
+          >
             <MediaPreview :item="item" />
             <template v-if="tasks[item.id]">
               <span
@@ -308,7 +368,7 @@ onBeforeRouteLeave(() => {
               </span>
               <span v-else class="thumb-badge fail" :title="tasks[item.id]!.errorMessage">!</span>
             </template>
-          </div>
+          </button>
           <!-- 傳好的就不能再改：要改請到照片詳情 -->
           <fieldset
             class="item-fields"
@@ -343,6 +403,18 @@ onBeforeRouteLeave(() => {
               :max-length="albumConfig.maxCaptionLength"
             />
           </fieldset>
+          <!-- 傳好的已經在相簿裡了，要刪請到照片詳情 -->
+          <button
+            v-if="!running && tasks[item.id]?.status !== 'succeeded'"
+            class="item-remove"
+            type="button"
+            :aria-label="item.kind === 'video' ? '不傳這支影片' : '不傳這張照片'"
+            @click="remove(item)"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
         </li>
       </ul>
       <button v-if="!running" class="add" type="button" @click="addMore">＋ 再選照片或影片</button>
@@ -357,6 +429,9 @@ onBeforeRouteLeave(() => {
         </button>
       </p>
     </section>
+
+    <MediaLightbox v-model="zoomed" />
+    <AppToast :toast="toast" />
 
     <div class="submit-bar">
       <button class="submit" type="button" :disabled="count === 0 || running" @click="upload">
@@ -434,6 +509,7 @@ onBeforeRouteLeave(() => {
 }
 
 .item {
+  position: relative;
   display: flex;
   gap: 12px;
   padding: 10px;
@@ -446,7 +522,8 @@ onBeforeRouteLeave(() => {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding: 0;
+  /* 右上角留給「✕」 */
+  padding: 0 28px 0 0;
   border: 0;
   display: flex;
   flex-direction: column;
@@ -513,6 +590,27 @@ onBeforeRouteLeave(() => {
   opacity: 0.7;
 }
 
+/* 圖示很小，按鈕做大一點，手指才按得到 */
+.item-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-ink-mute);
+}
+
+.item-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* 符號按鈕本身有留白，往左拉齊輸入框的文字 */
 .item-marks {
   margin-left: -9px;
@@ -542,6 +640,10 @@ onBeforeRouteLeave(() => {
   border-radius: 8px;
   border: 1px solid var(--c-line);
   overflow: hidden;
+  /* 點縮圖放大看 */
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
 }
 
 /* 上傳進度：沿著縮圖底部長出來的一條線 */
