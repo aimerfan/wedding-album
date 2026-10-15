@@ -13,9 +13,8 @@ export function fetchBlessings(filter: BlessingFilter, cursor?: string | null, l
   })
 }
 
-/** photoId 只能是自己上傳的照片；不帶就是留言牆上的獨立祝福 */
-export function createBlessing(text: string, photoId?: string) {
-  return api<Blessing>('/blessings', { method: 'POST', body: { text, photoId } })
+export function createBlessing(text: string) {
+  return api<Blessing>('/blessings', { method: 'POST', body: { text } })
 }
 
 export function updateBlessing(id: string, text: string) {

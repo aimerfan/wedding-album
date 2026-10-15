@@ -10,6 +10,7 @@ export const FALLBACK: AlbumConfig = {
   uploadConcurrency: 3,
   videoUploadConcurrency: 1,
   maxBlessingLength: 200,
+  maxCaptionLength: 200,
   uploadsOpen: true,
   kahootUrl: null,
 }

@@ -52,7 +52,7 @@ const videoBadge = computed(() => {
 
 <template>
   <div class="tile" :style="{ aspectRatio, background: gradient }">
-    <img v-if="src" :src="src" :alt="photo?.blessing ?? ''" loading="lazy" decoding="async" />
+    <img v-if="src" :src="src" :alt="photo?.caption ?? ''" loading="lazy" decoding="async" />
     <div v-else class="texture" />
     <span v-if="label" class="label">{{ label }}</span>
     <span v-if="videoBadge !== null" class="video-badge">

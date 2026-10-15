@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { createBlessing } from '@/api/blessings'
 import { ApiError } from '@/api/client'
 import { fetchConfig } from '@/api/config'
 import { uploadWithRetry } from '@/api/upload'
+import MarkPicker from '@/components/MarkPicker.vue'
 import MediaPreview from '@/components/MediaPreview.vue'
 import { FALLBACK, useAlbumConfig } from '@/composables/useAlbumConfig'
-import { addBlessing } from '@/stores/blessingLists'
+import { PHOTO_TAGS } from '@/config/photoTags'
 import { invalidateAll } from '@/stores/photoLists'
 import { wedding } from '@/config/wedding'
 import {
@@ -24,14 +24,6 @@ import type { PhotoTag, UploadStatus } from '@/types/album'
 const router = useRouter()
 const albumConfig = useAlbumConfig()
 
-/** 跟首頁的篩選 chips 同一套分類 */
-const tagOptions: { id: PhotoTag; label: string }[] = [
-  { id: 'engagement', label: '訂婚・迎娶' },
-  { id: 'banquet', label: '宴客' },
-  { id: 'candid', label: '花絮' },
-  { id: 'throwback', label: '那些年' },
-]
-
 const selected = computed(() =>
   uploadFlow.selectedIds
     .map((id) => uploadFlow.picked.find((p) => p.id === id))
@@ -45,30 +37,33 @@ const hasVideo = computed(() => selected.value.some((p) => p.kind === 'video'))
 const nickname = computed(() => session.nickname || '賓客')
 const initial = computed(() => nickname.value[0] ?? '賓')
 
-const blessingLength = computed(() => uploadFlow.draft.blessing.length)
+// --- 每張的分類與說明 -----------------------------------------------------
+// 多數人一次選的是同一類，所以上面先選一個預設，套用到每一張；個別改過的就不再跟著預設
 
-// --- 祝福輸入框下方的符號 -------------------------------------------------
-
-const MARKS = ['♥', '♡', '✿']
-const blessingEl = ref<HTMLTextAreaElement>()
-
-/** 插在游標的位置（有選取文字就取代），而不是一律加在最後；插完游標停在符號後面 */
-async function insertMark(mark: string) {
-  const el = blessingEl.value
-  const text = uploadFlow.draft.blessing
-  // 還沒點過輸入框時沒有游標，就加在最後
-  const start = el?.selectionStart ?? text.length
-  const end = el?.selectionEnd ?? text.length
-  const next = text.slice(0, start) + mark + text.slice(end)
-  if (next.length > albumConfig.maxBlessingLength) return
-
-  uploadFlow.draft.blessing = next
-  await nextTick()
-  if (el) {
-    el.focus()
-    el.setSelectionRange(start + mark.length, start + mark.length)
-  }
+function tagOf(item: PickedMedia): PhotoTag {
+  return uploadFlow.draft.tags[item.id] ?? uploadFlow.draft.tag
 }
+
+function setTag(item: PickedMedia, tag: PhotoTag) {
+  // 改回跟預設一樣，就當成沒改過，之後換預設時會跟著換
+  if (tag === uploadFlow.draft.tag) delete uploadFlow.draft.tags[item.id]
+  else uploadFlow.draft.tags[item.id] = tag
+}
+
+/**
+ * 符號只出現在正在輸入的那一張下面：一次最多 30 張，每張都放一排太擠。
+ * 失焦時不收起來，按符號、捲動畫面時才不會一閃一閃
+ */
+const typingId = ref('')
+const typingEl = ref<HTMLTextAreaElement | null>(null)
+
+function startTyping(item: PickedMedia, event: FocusEvent) {
+  typingId.value = item.id
+  typingEl.value = event.target as HTMLTextAreaElement
+}
+
+/** 跟預設不同的有幾張，提示賓客「換預設不會動到這些」 */
+const customTagCount = computed(() => selected.value.filter((p) => p.id in uploadFlow.draft.tags).length)
 
 onMounted(() => {
   // 直接開這個網址（重新整理、分享連結）時沒有選到的檔案，退回第一步
@@ -86,8 +81,6 @@ interface Task {
   /** 0–100 */
   progress: number
   errorMessage?: string
-  /** 上傳成功後拿到的照片 id，祝福要掛在第一張上 */
-  photoId?: string
   /** 失敗後正在等著自動重試 */
   retrying?: boolean
 }
@@ -112,12 +105,8 @@ const failedMessage = computed(() => {
   return `有 ${failedCount.value} 個檔案沒有傳成功：${reason}`
 })
 
-/** 照片都傳完了，但祝福沒送出去 */
-const blessingError = ref('')
-
 const submitLabel = computed(() => {
   if (running.value) return `上 傳 中 ${doneCount.value} / ${count.value}`
-  if (blessingError.value) return '重 新 送 出 祝 福'
   if (failedCount.value > 0) return `重 試 ${failedCount.value} 個`
   return `上 傳 ${summary.value}`
 })
@@ -171,7 +160,6 @@ async function upload() {
   running.value = true
 
   const config = await fetchConfig().catch(() => FALLBACK)
-  const tag = uploadFlow.draft.tag
   // 已經傳成功的不重傳；按「重試」時只會跑失敗的那幾張
   const pending = selected.value.filter((p) => tasks[p.id]?.status !== 'succeeded')
   for (const item of pending) tasks[item.id] = { status: 'pending', progress: 0 }
@@ -198,16 +186,17 @@ async function upload() {
 
       task.status = 'uploading'
       try {
-        const photo = await uploadWithRetry(
+        await uploadWithRetry(
           item.file,
-          tag,
+          // 分類與說明在送出的那一刻才讀：排隊等著的那幾張，上傳中還來得及改
+          { tag: tagOf(item), caption: uploadFlow.draft.captions[item.id] ?? '' },
           (percent) => {
             task.progress = percent
             if (percent > 0) task.retrying = false
           },
           () => (task.retrying = true),
         )
-        Object.assign(task, { status: 'succeeded', progress: 100, photoId: photo.id, retrying: false })
+        Object.assign(task, { status: 'succeeded', progress: 100, retrying: false })
       } catch (e) {
         const message = e instanceof ApiError ? e.message : '上傳失敗，請稍後再試'
         Object.assign(task, { status: 'failed', errorMessage: message, retrying: false })
@@ -226,31 +215,10 @@ async function upload() {
   running.value = false
 
   if (doneCount.value > 0) invalidateAll()
-  if (failedCount.value === 0) await finish()
+  if (failedCount.value === 0) finish()
 }
 
-/**
- * 照片傳完之後：有寫祝福就送出，掛在這批第一張成功的照片上（只送一次，
- * 不然一次傳 10 張，同一句祝福會在留言牆出現 10 次）。送出失敗就留在這頁，照片不必重傳。
- */
-async function finish() {
-  const text = uploadFlow.draft.blessing.trim()
-  const first = selected.value.map((p) => tasks[p.id]?.photoId).find(Boolean)
-  if (text && first) {
-    running.value = true
-    blessingError.value = ''
-    try {
-      addBlessing(await createBlessing(text, first))
-      invalidateAll() // 照片上多了祝福
-    } catch (e) {
-      blessingError.value =
-        '檔案都上傳好了，但祝福沒有送出：' +
-        (e instanceof ApiError ? e.message : '請稍後再試')
-      return
-    } finally {
-      running.value = false
-    }
-  }
+function finish() {
   // 還有沒勾的（例如一次選超過上限）就回選取頁接著傳下一批，都傳完才回首頁
   const left = finishBatch((p) => sizeProblem(p, albumConfig) === '', wedding.maxUploadCount)
   if (left > 0) {
@@ -259,11 +227,6 @@ async function finish() {
   }
   resetUploadFlow()
   router.push({ name: 'feed' })
-}
-
-function skip() {
-  uploadFlow.draft.blessing = ''
-  upload()
 }
 
 // 傳到一半離開會中斷上傳，先確認
@@ -288,48 +251,12 @@ onBeforeRouteLeave(() => {
         </svg>
         返回
       </button>
-      <h1>留下祝福</h1>
-      <button class="skip" type="button" :disabled="running" @click="skip">跳過</button>
+      <h1>上傳照片影片</h1>
+      <!-- 讓標題保持置中 -->
+      <span class="head-spacer" />
     </header>
 
-    <section class="preview">
-      <p class="preview-label">{{ summary }} · 將公開分享</p>
-      <div class="preview-row">
-        <div v-for="item in selected" :key="item.id" class="thumb">
-          <MediaPreview :item="item" />
-          <template v-if="tasks[item.id]">
-            <span
-              v-if="tasks[item.id]!.status === 'uploading' || tasks[item.id]!.status === 'pending'"
-              class="thumb-progress"
-              :style="{ width: tasks[item.id]!.progress + '%' }"
-            />
-            <span v-else-if="tasks[item.id]!.status === 'succeeded'" class="thumb-badge ok">✓</span>
-            <span v-else class="thumb-badge fail" :title="tasks[item.id]!.errorMessage">!</span>
-          </template>
-        </div>
-        <button
-          v-if="!running"
-          class="thumb add"
-          type="button"
-          aria-label="再選照片或影片"
-          @click="addMore"
-        >
-          ＋
-        </button>
-      </div>
-      <p v-if="hasVideo" class="video-hint">影片比較大，上傳時請停留在這一頁，也不要關掉螢幕。</p>
-      <p v-if="retrying" class="video-hint">現在上傳的人比較多，稍等一下會自動重新上傳…</p>
-      <p v-if="blessingError" class="upload-error" role="alert">{{ blessingError }}</p>
-      <p v-if="failedMessage" class="upload-error" role="alert">
-        {{ failedMessage }}
-        <!-- 壞掉的檔案怎麼重試都不會成功，給一條出路 -->
-        <button v-if="doneCount > 0" class="give-up" type="button" @click="finish">
-          略過失敗的，回相簿
-        </button>
-      </p>
-    </section>
-
-    <section class="block">
+    <section class="block intro">
       <div class="identity">
         <span class="identity-avatar">{{ initial }}</span>
         <div class="identity-text">
@@ -340,48 +267,12 @@ onBeforeRouteLeave(() => {
           更改
         </button>
       </div>
-    </section>
 
-    <section class="block">
-      <div class="card">
-        <div class="card-head">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 21s-7-5-7-11a4 4 0 017-2.5A4 4 0 0119 10c0 6-7 11-7 11z" />
-          </svg>
-          <span>寫下你的祝福（選填）</span>
-        </div>
-
-        <textarea
-          ref="blessingEl"
-          v-model="uploadFlow.draft.blessing"
-          class="blessing"
-          :maxlength="albumConfig.maxBlessingLength"
-          placeholder="願你們的愛情&#10;如同今日的天氣&#10;晴朗、明亮、永遠溫暖"
-          rows="4"
-        />
-
-        <div class="card-foot">
-          <!-- mousedown.prevent：按符號時輸入框不會失焦，游標位置與手機鍵盤都留著 -->
-          <div class="marks">
-            <button
-              v-for="m in MARKS"
-              :key="m"
-              type="button"
-              @mousedown.prevent
-              @click="insertMark(m)"
-            >
-              {{ m }}
-            </button>
-          </div>
-          <span class="counter">{{ blessingLength }} / {{ albumConfig.maxBlessingLength }}</span>
-        </div>
-      </div>
-
-      <fieldset class="settings">
-        <legend class="settings-label">這些是在哪個環節拍的？</legend>
+      <fieldset class="settings" :disabled="running">
+        <legend class="settings-label">這些大多是在哪個環節拍的？</legend>
         <div class="tags">
           <label
-            v-for="t in tagOptions"
+            v-for="t in PHOTO_TAGS"
             :key="t.id"
             class="tag"
             :class="{ active: uploadFlow.draft.tag === t.id }"
@@ -390,7 +281,81 @@ onBeforeRouteLeave(() => {
             {{ t.label }}
           </label>
         </div>
+        <p class="settings-hint">
+          {{
+            customTagCount > 0
+              ? `另有 ${customTagCount} 個已個別改過分類，不會跟著換`
+              : '不一樣的可以在下面個別改'
+          }}
+        </p>
       </fieldset>
+    </section>
+
+    <section class="items">
+      <p class="items-label">{{ summary }} · 將公開分享</p>
+      <ul class="item-list">
+        <li v-for="item in selected" :key="item.id" class="item">
+          <div class="thumb">
+            <MediaPreview :item="item" />
+            <template v-if="tasks[item.id]">
+              <span
+                v-if="tasks[item.id]!.status === 'uploading' || tasks[item.id]!.status === 'pending'"
+                class="thumb-progress"
+                :style="{ width: tasks[item.id]!.progress + '%' }"
+              />
+              <span v-else-if="tasks[item.id]!.status === 'succeeded'" class="thumb-badge ok">
+                ✓
+              </span>
+              <span v-else class="thumb-badge fail" :title="tasks[item.id]!.errorMessage">!</span>
+            </template>
+          </div>
+          <!-- 傳好的就不能再改：要改請到照片詳情 -->
+          <fieldset
+            class="item-fields"
+            :disabled="running || tasks[item.id]?.status === 'succeeded'"
+          >
+            <span class="item-tag" :class="{ custom: item.id in uploadFlow.draft.tags }">
+              <select
+                :value="tagOf(item)"
+                aria-label="分類"
+                @change="setTag(item, ($event.target as HTMLSelectElement).value as PhotoTag)"
+              >
+                <option v-for="t in PHOTO_TAGS" :key="t.id" :value="t.id">{{ t.label }}</option>
+              </select>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </span>
+            <textarea
+              v-model="uploadFlow.draft.captions[item.id]"
+              class="item-caption"
+              :maxlength="albumConfig.maxCaptionLength"
+              placeholder="想說點什麼…（選填）"
+              rows="2"
+              aria-label="想說的話"
+              @focus="startTyping(item, $event)"
+            />
+            <MarkPicker
+              v-if="typingId === item.id"
+              v-model="uploadFlow.draft.captions[item.id]"
+              class="item-marks"
+              :target="typingEl"
+              :max-length="albumConfig.maxCaptionLength"
+            />
+          </fieldset>
+        </li>
+      </ul>
+      <button v-if="!running" class="add" type="button" @click="addMore">＋ 再選照片或影片</button>
+
+      <p v-if="hasVideo" class="video-hint">影片比較大，上傳時請停留在這一頁，也不要關掉螢幕。</p>
+      <p v-if="retrying" class="video-hint">現在上傳的人比較多，稍等一下會自動重新上傳…</p>
+      <p v-if="failedMessage" class="upload-error" role="alert">
+        {{ failedMessage }}
+        <!-- 壞掉的檔案怎麼重試都不會成功，給一條出路 -->
+        <button v-if="doneCount > 0" class="give-up" type="button" @click="finish">
+          略過失敗的，回相簿
+        </button>
+      </p>
     </section>
 
     <div class="submit-bar">
@@ -424,8 +389,7 @@ onBeforeRouteLeave(() => {
   font-weight: 500;
 }
 
-.back,
-.skip {
+.back {
   border: 0;
   background: transparent;
   display: flex;
@@ -436,37 +400,138 @@ onBeforeRouteLeave(() => {
   min-width: 56px;
 }
 
+.head-spacer {
+  min-width: 56px;
+}
+
 .back svg {
   width: 16px;
   height: 16px;
 }
 
-.skip {
-  justify-content: flex-end;
-  font-size: 13px;
-  color: var(--c-ink-mute);
+.intro {
+  padding-top: 18px;
 }
 
-.preview {
-  padding: 18px 16px 14px;
+.items {
+  padding: 0 16px;
 }
 
-.preview-label {
+.items-label {
   margin: 0 0 8px;
   font-size: 11px;
   letter-spacing: 1.5px;
   color: var(--c-ink-mute);
 }
 
-.preview-row {
+.item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.preview-row::-webkit-scrollbar {
-  display: none;
+.item {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--c-line);
+  background: var(--c-card);
+}
+
+.item-fields {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 原生下拉選單：手機上會叫出系統的選擇器，比自己畫的好按。外觀畫成小 chip */
+.item-tag {
+  position: relative;
+  align-self: flex-start;
+  color: var(--c-ink-soft);
+}
+
+.item-tag select {
+  padding: 3px 26px 3px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--c-line-strong);
+  background: transparent;
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: inherit;
+}
+
+.item-tag svg {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* 個別改過、跟預設不同的，標出來 */
+.item-tag.custom {
+  color: var(--c-rose);
+}
+
+.item-tag.custom select {
+  border-color: var(--c-rose);
+}
+
+.item-caption {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  resize: none;
+  background: transparent;
+  font-family: var(--f-serif);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--c-ink);
+  caret-color: var(--c-rose);
+}
+
+.item-caption:focus {
+  outline: none;
+}
+
+.item-caption::placeholder {
+  color: var(--c-ink-mute);
+  opacity: 0.7;
+}
+
+/* 符號按鈕本身有留白，往左拉齊輸入框的文字 */
+.item-marks {
+  margin-left: -9px;
+}
+
+.item-fields:disabled {
+  opacity: 0.6;
+}
+
+.add {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 0;
+  border: 1.5px dashed var(--c-line-strong);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
 }
 
 .thumb {
@@ -478,7 +543,6 @@ onBeforeRouteLeave(() => {
   border: 1px solid var(--c-line);
   overflow: hidden;
 }
-
 
 /* 上傳進度：沿著縮圖底部長出來的一條線 */
 .thumb-progress {
@@ -534,17 +598,6 @@ onBeforeRouteLeave(() => {
   text-decoration: underline;
 }
 
-.thumb.add {
-  border: 1.5px dashed var(--c-ink-mute);
-  background: transparent;
-  color: var(--c-ink-mute);
-  font-size: 22px;
-  font-weight: 300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .block {
   padding: 0 16px;
   margin-bottom: 14px;
@@ -595,77 +648,11 @@ onBeforeRouteLeave(() => {
   color: var(--c-rose);
 }
 
-.card {
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid var(--c-line);
-  background: var(--c-card);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
 
-.card-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--c-rose);
-}
 
-.card-head svg {
-  width: 14px;
-  height: 14px;
-}
 
-.blessing {
-  border: 0;
-  padding: 0;
-  resize: none;
-  background: transparent;
-  font-family: var(--f-serif);
-  font-size: 15px;
-  line-height: 1.7;
-  color: var(--c-ink);
-  caret-color: var(--c-rose);
-  min-height: 96px;
-}
 
-.blessing:focus {
-  outline: none;
-}
 
-.blessing::placeholder {
-  color: var(--c-ink-mute);
-  opacity: 0.55;
-}
-
-.card-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid var(--c-line);
-}
-
-.marks {
-  display: flex;
-  gap: 12px;
-}
-
-.marks button {
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  color: var(--c-ink-mute);
-  padding: 0;
-}
-
-.counter {
-  font-size: 10px;
-  color: var(--c-ink-mute);
-}
 
 .settings {
   margin: 14px 0 0;
@@ -714,6 +701,12 @@ onBeforeRouteLeave(() => {
   border-color: transparent;
   background: var(--c-rose);
   color: #fff;
+}
+
+.settings-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--c-ink-mute);
 }
 
 .tag:has(input:focus-visible) {

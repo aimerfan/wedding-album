@@ -136,7 +136,7 @@ export function sizeProblem(
 }
 
 /**
- * 上傳流程：選照片（第一步）→ 寫祝福（第二步）。
+ * 上傳流程：選照片（第一步）→ 分類與想說的話（第二步）。
  * 檔案放在這裡而不是各自的元件裡，否則離開選擇頁時 object URL 會被回收，
  * 第二步就拿不到預覽了。
  */
@@ -149,7 +149,7 @@ export const uploadFlow = reactive({
 })
 
 function emptyDraft(): UploadDraft {
-  return { blessing: '', tag: 'banquet' }
+  return { tag: 'banquet', tags: {}, captions: {} }
 }
 
 function revokePicked() {
@@ -206,7 +206,7 @@ export function discardPicked(snapshot: PickedSnapshot) {
 
 /**
  * 一批傳完：拿掉傳好的與傳不了的（太大），沒勾的留在待選區給下一批，並預設勾起前 limit 個。
- * 祝福清空，不然下一批會再送一次同樣的祝福；分類留著，同一次多半是同一類。回傳還剩幾個
+ * 預設分類留著，同一次多半是同一類；留下來的那些已經寫好的說明、分類也留著。回傳還剩幾個
  */
 export function finishBatch(canUpload: (item: PickedMedia) => boolean, limit: number): number {
   const sent = new Set(uploadFlow.selectedIds)
@@ -216,7 +216,14 @@ export function finishBatch(canUpload: (item: PickedMedia) => boolean, limit: nu
   uploadFlow.uploadedSummary = describeMedia(uploadFlow.picked.filter((p) => sent.has(p.id)))
   uploadFlow.picked = keep
   uploadFlow.selectedIds = keep.slice(0, limit).map((p) => p.id)
-  uploadFlow.draft = { ...uploadFlow.draft, blessing: '' }
+  const ids = new Set(keep.map((p) => p.id))
+  const only = <T>(record: Record<string, T>) =>
+    Object.fromEntries(Object.entries(record).filter(([id]) => ids.has(id)))
+  uploadFlow.draft = {
+    tag: uploadFlow.draft.tag,
+    tags: only(uploadFlow.draft.tags),
+    captions: only(uploadFlow.draft.captions),
+  }
   return keep.length
 }
 

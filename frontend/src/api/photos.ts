@@ -39,6 +39,11 @@ export function setFavorited(id: string, favorited: boolean) {
   return api<Photo>(photoPath(id, 'favorite'), { method: favorited ? 'PUT' : 'DELETE' })
 }
 
+/** 改分類或說明，沒帶的欄位不變。caption 傳 null 是刪掉說明。回傳更新後的照片 */
+export function editPhoto(id: string, changes: { tag?: PhotoTag; caption?: string | null }) {
+  return api<Photo>('/photos/' + encodeURIComponent(id), { method: 'PATCH', body: changes })
+}
+
 /** 刪除照片：上傳者刪自己的，管理員可刪任何一張 */
 export function deletePhoto(id: string) {
   return api<null>('/photos/' + encodeURIComponent(id), { method: 'DELETE' })

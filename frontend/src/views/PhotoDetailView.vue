@@ -2,8 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
-import { deletePhoto, fetchPhoto, setFavorited, setLiked } from '@/api/photos'
+import { deletePhoto, editPhoto, fetchPhoto, setFavorited, setLiked } from '@/api/photos'
+import MarkPicker from '@/components/MarkPicker.vue'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
+import { useAlbumConfig } from '@/composables/useAlbumConfig'
+import { PHOTO_TAGS, tagLabel } from '@/config/photoTags'
 import {
   ensureLoaded,
   filterFromQuery,
@@ -13,11 +16,12 @@ import {
   updatePhoto,
 } from '@/stores/photoLists'
 import { session } from '@/stores/session'
-import type { Photo } from '@/types/album'
+import type { Photo, PhotoTag } from '@/types/album'
 
 const props = defineProps<{ photoId: string }>()
 const route = useRoute()
 const router = useRouter()
+const albumConfig = useAlbumConfig()
 
 /**
  * 左右滑動要在哪一串照片裡換張：由網址上的篩選條件決定（例如 ?uploader=me、?tag=banquet），
@@ -99,7 +103,9 @@ const takenLabel = computed(() => {
     ' · ' +
     String(d.getHours()).padStart(2, '0') +
     ':' +
-    String(d.getMinutes()).padStart(2, '0')
+    String(d.getMinutes()).padStart(2, '0') +
+    ' · ' +
+    tagLabel(p.tag)
   )
 })
 
@@ -160,8 +166,14 @@ const deleteLabel = computed(() => {
 const moreOpen = ref(false)
 const deleting = ref(false)
 
-// 換張時把選單收起來
-watch(() => props.photoId, () => (moreOpen.value = false))
+// 換張時把選單、編輯中的說明收起來
+watch(
+  () => props.photoId,
+  () => {
+    moreOpen.value = false
+    editing.value = false
+  },
+)
 
 async function removeCurrent() {
   const target = photo.value
@@ -195,6 +207,73 @@ async function removeCurrent() {
   }
 }
 
+// --- 說明與分類 -----------------------------------------------------------
+// 上傳者可以改說明與分類；管理員可以改分類、刪掉說明，但不能替上傳者寫說明（後端也這樣把關）
+
+const editing = ref(false)
+const draftCaption = ref('')
+const captionEl = ref<HTMLTextAreaElement>()
+const draftTag = ref<PhotoTag>('banquet')
+const saving = ref(false)
+const editError = ref('')
+
+const editLabel = computed(() => (isMine.value ? '編輯文字與分類' : '改分類（管理員）'))
+
+function startEdit() {
+  const p = photo.value
+  if (!p) return
+  draftCaption.value = p.caption ?? ''
+  draftTag.value = p.tag
+  editError.value = ''
+  moreOpen.value = false
+  editing.value = true
+}
+
+type PhotoChanges = Parameters<typeof editPhoto>[1]
+
+/** 送出修改，成功就換掉畫面上的那張並收起編輯區。回傳有沒有成功 */
+async function send(target: Photo, changes: PhotoChanges) {
+  saving.value = true
+  editError.value = ''
+  try {
+    apply(await editPhoto(target.id, changes))
+    editing.value = false
+    return true
+  } catch (e) {
+    editError.value = e instanceof ApiError ? e.message : '儲存失敗，請稍後再試'
+    return false
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveEdit() {
+  const target = photo.value
+  if (!target || saving.value) return
+  const changes: PhotoChanges = {}
+  if (draftTag.value !== target.tag) changes.tag = draftTag.value
+  const caption = draftCaption.value.trim()
+  if (isMine.value && caption !== (target.caption ?? '')) changes.caption = caption || null
+  // 什麼都沒改就直接收起來，不必送
+  if (Object.keys(changes).length === 0) {
+    editing.value = false
+    return
+  }
+  await send(target, changes)
+}
+
+async function removeCaption() {
+  const target = photo.value
+  if (!target || saving.value) return
+  const question = isMine.value
+    ? '確定要刪除這段文字嗎？'
+    : `以管理員身分刪除「${target.uploader.nickname}」在這張寫的文字？`
+  if (!window.confirm(question)) return
+  moreOpen.value = false
+  // 從選單刪的時候沒有編輯區，錯誤改顯示在按讚那一列下面
+  if (!(await send(target, { caption: null })) && !editing.value) actionError.value = editError.value
+}
+
 function toggleFavorite() {
   toggle(
     (p) => ({ ...p, favoritedByMe: !p.favoritedByMe }),
@@ -212,7 +291,7 @@ function toggleFavorite() {
         </svg>
       </button>
       <span class="counter">{{ counter }}</span>
-      <!-- 只有上傳者與管理員有選單；其他人留一塊空白，讓序號保持置中 -->
+      <!-- 只有上傳者與管理員有選單（說明、分類、刪除）；其他人留一塊空白，讓序號保持置中 -->
       <div v-if="canDelete" class="more">
         <button
           class="round"
@@ -234,6 +313,16 @@ function toggleFavorite() {
           </svg>
         </button>
         <div v-if="moreOpen" class="more-pop" role="menu">
+          <button type="button" role="menuitem" @click="startEdit">{{ editLabel }}</button>
+          <button
+            v-if="!isMine && photo.caption"
+            type="button"
+            role="menuitem"
+            :disabled="saving"
+            @click="removeCaption"
+          >
+            刪除文字（管理員）
+          </button>
           <button type="button" role="menuitem" :disabled="deleting" @click="removeCurrent">
             {{ deleting ? '刪除中…' : deleteLabel }}
           </button>
@@ -303,11 +392,73 @@ function toggleFavorite() {
       </div>
       <p v-if="actionError" class="action-error" role="alert">{{ actionError }}</p>
 
-      <div v-if="photo.blessing" class="blessing">
-        <!-- 上傳者就在正上方，這裡不再重複名字；標籤留著是為了卡片上緣的缺口裝飾 -->
-        <span class="blessing-tag">祝福</span>
-        <p class="blessing-text">{{ photo.blessing }}</p>
+      <form v-if="editing" class="editor" @submit.prevent="saveEdit">
+        <fieldset class="editor-tags" :disabled="saving">
+          <legend>分類</legend>
+          <div class="editor-tag-grid">
+            <label
+              v-for="t in PHOTO_TAGS"
+              :key="t.id"
+              class="editor-tag"
+              :class="{ active: draftTag === t.id }"
+            >
+              <input v-model="draftTag" type="radio" name="detail-tag" :value="t.id" />
+              {{ t.label }}
+            </label>
+          </div>
+        </fieldset>
+        <template v-if="isMine">
+          <textarea
+            ref="captionEl"
+            v-model="draftCaption"
+            class="editor-caption"
+            :maxlength="albumConfig.maxCaptionLength"
+            :disabled="saving"
+            placeholder="想說點什麼…（選填）"
+            rows="3"
+            aria-label="想說的話"
+          />
+          <div class="editor-foot">
+            <MarkPicker
+              v-model="draftCaption"
+              class="editor-marks"
+              :target="captionEl"
+              :max-length="albumConfig.maxCaptionLength"
+            />
+            <span class="editor-counter">
+              {{ draftCaption.length }} / {{ albumConfig.maxCaptionLength }}
+            </span>
+          </div>
+        </template>
+        <p v-if="editError" class="action-error" role="alert">{{ editError }}</p>
+        <div class="editor-actions">
+          <button
+            v-if="isMine && photo.caption"
+            class="editor-delete"
+            type="button"
+            :disabled="saving"
+            @click="removeCaption"
+          >
+            刪除文字
+          </button>
+          <button class="editor-cancel" type="button" :disabled="saving" @click="editing = false">
+            取消
+          </button>
+          <button class="editor-save" type="submit" :disabled="saving">
+            {{ saving ? '儲存中…' : '儲存' }}
+          </button>
+        </div>
+      </form>
+
+      <!-- 上傳者就在正上方，一看就知道是誰說的，不必再加名字或標籤 -->
+      <div v-else-if="photo.caption" class="caption">
+        <p class="caption-text">{{ photo.caption }}</p>
+        <p v-if="photo.captionEditedAt" class="caption-edited">已編輯</p>
       </div>
+
+      <button v-else-if="isMine" class="caption-add" type="button" @click="startEdit">
+        ＋ 為這張說點什麼
+      </button>
     </section>
   </main>
 
@@ -419,7 +570,7 @@ function toggleFavorite() {
   padding: calc(var(--page-top) + 84px) 0 16px;
 }
 
-/* 留言區固定貼底；祝福太長時在面板內捲動，不把照片擠掉 */
+/* 資訊區固定貼底；說明太長時在面板內捲動，不把照片擠掉 */
 .panel {
   flex-shrink: 0;
   max-height: calc(var(--screen-h) * 0.55);
@@ -535,30 +686,173 @@ function toggleFavorite() {
   color: var(--c-rose);
 }
 
-.blessing {
+.caption {
   position: relative;
   padding: 14px 16px;
   border-radius: 12px;
   background: var(--c-bg-soft);
 }
 
-/* 標籤壓在卡片上緣，用底色蓋住邊框做出缺口 */
-.blessing-tag {
-  position: absolute;
-  top: -8px;
-  left: 16px;
-  padding: 0 8px;
-  background: var(--c-bg-soft);
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  color: var(--c-rose);
-}
-
-.blessing-text {
+.caption-text {
   margin: 0;
   font-family: var(--f-serif);
   font-size: 14px;
   line-height: 1.7;
   text-align: justify;
+  /* 保留說明裡的換行 */
+  white-space: pre-line;
+}
+
+.caption-edited {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: var(--c-ink-mute);
+  text-align: right;
+}
+
+.caption-add {
+  width: 100%;
+  padding: 12px 0;
+  border: 1.5px dashed var(--c-line-strong);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--c-bg-soft);
+}
+
+.editor-tags {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.editor-tags legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--c-ink-mute);
+}
+
+.editor-tag-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* 單選用原生 radio 保留可存取性，外觀畫成 chip（同上傳頁） */
+.editor-tag {
+  padding: 7px 0;
+  border-radius: 16px;
+  border: 1px solid var(--c-line-strong);
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
+  cursor: pointer;
+}
+
+.editor-tag input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.editor-tag.active {
+  border-color: transparent;
+  background: var(--c-rose);
+  color: #fff;
+}
+
+.editor-tag:has(input:focus-visible) {
+  outline: 2px solid var(--c-rose-soft);
+  outline-offset: 2px;
+}
+
+.editor-caption {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  resize: none;
+  background: var(--c-card);
+  font-family: var(--f-serif);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--c-ink);
+  caret-color: var(--c-rose);
+}
+
+.editor-caption:focus {
+  outline: none;
+  border-color: var(--c-rose-soft);
+}
+
+.editor-foot {
+  margin-top: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 符號按鈕本身有留白，往左拉齊輸入框 */
+.editor-marks {
+  margin-left: -6px;
+}
+
+.editor-counter {
+  font-size: 10px;
+  color: var(--c-ink-mute);
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 刪除放最左邊，跟儲存離遠一點，不容易誤按 */
+.editor-delete {
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--c-rose);
+}
+
+.editor-cancel,
+.editor-save {
+  padding: 7px 18px;
+  border-radius: 16px;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.editor-cancel {
+  border: 1px solid var(--c-line-strong);
+  background: transparent;
+  color: var(--c-ink-soft);
+}
+
+.editor-save {
+  border: 0;
+  background: var(--c-rose);
+  color: #fff;
+}
+
+.editor-actions button:disabled {
+  opacity: 0.5;
 }
 </style>
