@@ -1,8 +1,24 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+
+/**
+ * 拿掉 vite-plugin-pwa 自動插入的 manifest 連結，改由 index.html 的小段程式依活動碼產生。
+ * 外掛沒有選項可以只關掉這條連結（manifest: false 會連 manifest 檔都不產生）。
+ */
+function dropManifestLink(): Plugin {
+  return {
+    name: 'drop-manifest-link',
+    // 外掛自己是 enforce: 'post'，這裡也要是，並且在 plugins 裡排在它後面
+    enforce: 'post',
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html) => html.replace(/\s*<link rel="manifest"[^>]*>/, ''),
+    },
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -12,7 +28,8 @@ export default defineConfig({
       // 讓 Service Worker 在 dev 也能跑，方便在手機上驗證安裝流程
       devOptions: { enabled: true, type: 'module' },
       includeAssets: ['favicon.png', 'apple-touch-icon.png'],
-      // 有活動碼時，index.html 會改用後端的 /api/manifest（start_url 帶活動碼），兩邊內容要一致
+      // 有活動碼時，index.html 會改用後端的 /api/manifest（start_url 帶活動碼），兩邊內容要一致。
+      // 這裡只負責產生 manifest 檔，連結由 index.html 產生（見上面的 dropManifestLink）
       manifest: {
         // 固定 id：start_url 帶不帶活動碼，都是同一個 app
         id: '/',
@@ -77,6 +94,7 @@ export default defineConfig({
         ],
       },
     }),
+    dropManifestLink(),
   ],
   resolve: {
     alias: {

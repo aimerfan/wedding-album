@@ -12,6 +12,41 @@
     <meta name="apple-mobile-web-app-title" content="婚禮相簿" />
 
     <!--
+      manifest 連結由這段程式產生（vite.config.ts 把外掛自動插入的那條拿掉了）。
+      iPhone 從主畫面打開時，網址就是 manifest 的 start_url，而且讀不到 Safari 存下的活動碼。
+      有活動碼就用後端產生的 manifest（start_url 帶上 ?code=），從主畫面打開才加入得了相簿。
+      一定要在 head 裡一次給對：iPhone Safari 讀到連結就抓 manifest，事後改 href 不會重抓。
+      活動碼的來源跟 src/stores/session.ts 的 initialEventCode 一致。
+    -->
+    <script>
+      ;(function () {
+        function fromUrl(path, search) {
+          if (path === '/admin') return null
+          var params = new URLSearchParams(search)
+          var code = params.get('code')
+          if (code) return code
+          var redirect = params.get('redirect') || ''
+          if (redirect.charAt(0) !== '/' || redirect.charAt(1) === '/') return null
+          var inner = new URL(redirect, location.origin)
+          return fromUrl(inner.pathname, inner.search)
+        }
+        var code = null
+        try {
+          code = fromUrl(location.pathname, location.search)
+        } catch (e) {}
+        if (!code) {
+          try {
+            code = localStorage.getItem('wedding-album:event-code')
+          } catch (e) {}
+        }
+        var link = document.createElement('link')
+        link.rel = 'manifest'
+        link.href = code ? '/api/manifest?code=' + encodeURIComponent(code) : '/manifest.webmanifest'
+        document.head.appendChild(link)
+      })()
+    </script>
+
+    <!--
       中文字型很肥，Google Fonts 會依 unicode-range 切片，
       瀏覽器只會下載實際用到的子集。字型檔由 Service Worker 快取（見 vite.config.ts）。
     -->
@@ -25,24 +60,6 @@
     <title>婚禮相簿</title>
   </head>
   <body>
-    <!--
-      iPhone 從主畫面打開時，網址就是 manifest 的 start_url，而且讀不到 Safari 存下的活動碼。
-      有活動碼就改用後端產生的 manifest（start_url 帶上 ?code=），從主畫面打開才加入得了相簿。
-      放在 body 開頭：vite-plugin-pwa 插入的 manifest 連結在 head 裡，這時已經有了。
-      活動碼的來源跟 src/stores/session.ts 的 initialEventCode 一致。
-    -->
-    <script>
-      ;(function () {
-        var link = document.querySelector('link[rel="manifest"]')
-        var code = location.pathname === '/admin' ? '' : new URLSearchParams(location.search).get('code')
-        if (!code) {
-          try {
-            code = localStorage.getItem('wedding-album:event-code')
-          } catch (e) {}
-        }
-        if (link && code) link.href = '/api/manifest?code=' + encodeURIComponent(code)
-      })()
-    </script>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

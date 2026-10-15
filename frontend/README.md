@@ -47,8 +47,11 @@ npm run dev
     iPhone 和 Android 放到主畫面時會自己裁圓角，原圖若已經有圓角，就會露出黑邊或變成兩層圓角。
     `pwa-maskable-512x512.png` 另外把圖縮到 80%、四周補上背景色，因為有些 Android 會裁成圓形，滿版會切到字。
 - iOS 沒有安裝提示 API，「加到主畫面」改用引導畫面（`components/InstallGuide.vue`），步驟要跟 Safari 實際的分享選單一致
-- 有活動碼時，`index.html` 裡的小段程式把 manifest 換成後端的 `/api/manifest?code=…`，`start_url` 才會帶活動碼：
-  iPhone 主畫面 app 跟 Safari 的資料是分開的，不這樣做從主畫面打開會加入不了。
+- manifest 連結由 `index.html` `<head>` 裡的小段程式產生：有活動碼就指向後端的 `/api/manifest?code=…`，`start_url` 才會帶活動碼；
+  沒有就指向靜態的 `/manifest.webmanifest`。iPhone 主畫面 app 跟 Safari 的資料是分開的，不這樣做從主畫面打開會加入不了。
+  - 外掛自動插入的連結被 `vite.config.ts` 的 `dropManifestLink` 拿掉了。
+  - 連結一定要一開始就給對：iPhone Safari 讀到連結就抓 manifest，事後改 `href` 不會重抓（正式環境的 nginx 記錄證實過）。
+  - 活動碼也會從 `/welcome?redirect=/?code=…` 的 `redirect` 裡找，規則跟 `stores/session.ts` 一致。
   **manifest 的內容 `vite.config.ts` 與 `backend/app/api/manifest.py` 各有一份，改一邊要改另一邊。**
 
 ## 已知的坑
