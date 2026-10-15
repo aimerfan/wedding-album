@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MediaPreview from '@/components/MediaPreview.vue'
 import { useAlbumConfig } from '@/composables/useAlbumConfig'
@@ -8,9 +8,13 @@ import {
   TOO_LARGE_HINT,
   addPicked,
   describeMedia,
+  discardPicked,
+  restorePicked,
   sizeProblem,
+  takePicked,
   uploadFlow,
   type PickedMedia,
+  type PickedSnapshot,
 } from '@/stores/session'
 
 /**
@@ -56,12 +60,75 @@ const selectedPreviews = computed(() =>
     .filter((p): p is PickedMedia => Boolean(p)),
 )
 
+/** 沒勾的檔案裡，不是太大、只是因為張數上限沒勾到的。勾滿了還有這些，就提醒傳完可以接著傳 */
+const overLimitNotice = computed(() => {
+  if (selectedCount.value < wedding.maxUploadCount) return ''
+  const rest = picked.value.filter((p) => !selectedIds.value.includes(p.id) && !isTooLarge(p))
+  if (rest.length === 0) return ''
+  return `一次最多上傳 ${wedding.maxUploadCount} 個，還有 ${describeMedia(rest)}沒有勾。傳完這批會回到這裡，可以接著傳。`
+})
+
+// --- 短暫提示（幾秒後自己消失，不用按關閉） ------------------------------
+
+interface Toast {
+  text: string
+  action?: { label: string; run: () => void }
+}
+
+const toast = ref<Toast | null>(null)
+let toastTimer = 0
+
+/** 剛清空的內容，提示還在時可以按「復原」放回去 */
+let cleared: PickedSnapshot | null = null
+
+function showToast(next: Toast) {
+  hideToast()
+  toast.value = next
+  toastTimer = window.setTimeout(hideToast, next.action ? 5000 : 3000)
+}
+
+function hideToast() {
+  window.clearTimeout(toastTimer)
+  toast.value = null
+  // 提示消失就不能復原了，清掉的預覽可以回收
+  if (cleared) discardPicked(cleared)
+  cleared = null
+}
+
+// --- 清空待選區 -----------------------------------------------------------
+
+function clearAll() {
+  const count = picked.value.length
+  const snapshot = takePicked()
+  showToast({ text: `已清空 ${count} 個`, action: { label: '復原', run: undo } })
+  cleared = snapshot
+}
+
+function undo() {
+  if (!cleared) return
+  restorePicked(cleared)
+  cleared = null
+  hideToast()
+}
+
+onMounted(() => {
+  // 剛傳完一批、還有沒傳的回到這裡
+  if (uploadFlow.uploadedSummary) {
+    showToast({ text: `已上傳 ${uploadFlow.uploadedSummary}，剩下的可以接著傳` })
+    uploadFlow.uploadedSummary = ''
+  }
+})
+
+onBeforeUnmount(hideToast)
+
 function openPicker() {
   fileInput.value?.click()
 }
 
 function onFilesChosen(event: Event) {
   const input = event.target as HTMLInputElement
+  // 清空後又選了新的，就不再提供復原
+  hideToast()
   const added = addPicked(Array.from(input.files ?? []))
   input.value = ''
   // 新選的預設勾起來（太大的除外），接在原本已勾的後面；超過張數上限的部分不勾
@@ -79,9 +146,13 @@ function toggle(id: string) {
   const i = selectedIds.value.indexOf(id)
   if (i >= 0) {
     selectedIds.value.splice(i, 1)
-  } else if (selectedCount.value < wedding.maxUploadCount) {
+  } else {
     const item = picked.value.find((p) => p.id === id)
     if (item && isTooLarge(item)) return
+    if (selectedCount.value >= wedding.maxUploadCount) {
+      showToast({ text: `已經選了 ${wedding.maxUploadCount} 個，先取消其他的才能換這個` })
+      return
+    }
     selectedIds.value.push(id)
   }
 }
@@ -142,9 +213,11 @@ function next() {
     <template v-else>
       <div class="sources">
         <button class="source add" type="button" @click="openPicker">＋ 再選</button>
+        <button class="source clear" type="button" @click="clearAll">清空</button>
       </div>
 
       <p v-if="tooLargeNotice" class="too-large-notice">{{ tooLargeNotice }}</p>
+      <p v-if="overLimitNotice" class="over-limit-notice">{{ overLimitNotice }}</p>
 
       <div class="grid">
         <button
@@ -182,6 +255,15 @@ function next() {
         <button class="tray-btn" type="button" @click="next">下一步 →</button>
       </div>
     </template>
+
+    <Transition name="toast">
+      <div v-if="toast" class="toast" role="status">
+        <span>{{ toast.text }}</span>
+        <button v-if="toast.action" type="button" @click="toast.action.run">
+          {{ toast.action.label }}
+        </button>
+      </div>
+    </Transition>
   </main>
 </template>
 
@@ -321,6 +403,14 @@ function next() {
   color: var(--c-rose);
 }
 
+/* 不常用又會清掉東西，放最右邊、不加框，不跟「再選」搶眼 */
+.source.clear {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--c-ink-mute);
+}
+
 .grid {
   padding: 0 8px;
   display: grid;
@@ -342,6 +432,60 @@ function next() {
   font-size: 12px;
   line-height: 1.7;
   color: var(--c-rose);
+}
+
+/* 不是錯誤，只是提醒，用一般的文字色 */
+.over-limit-notice {
+  margin: 0 16px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--c-ink-soft);
+}
+
+/* 浮在底部「下一步」那條的上方 */
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--safe-bottom) + 92px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--c-ink);
+  box-shadow: 0 12px 32px rgba(61, 46, 38, 0.25);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--c-bg);
+}
+
+.toast span {
+  flex: 1;
+}
+
+.toast button {
+  flex-shrink: 0;
+  padding: 4px 4px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-rose-soft);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 /* 太大的檔案：蓋一層白霧，右上角標「太大」取代勾選圈 */

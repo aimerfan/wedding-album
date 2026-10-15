@@ -9,8 +9,10 @@ import MediaPreview from '@/components/MediaPreview.vue'
 import { FALLBACK, useAlbumConfig } from '@/composables/useAlbumConfig'
 import { addBlessing } from '@/stores/blessingLists'
 import { invalidateAll } from '@/stores/photoLists'
+import { wedding } from '@/config/wedding'
 import {
   describeMedia,
+  finishBatch,
   resetUploadFlow,
   sizeProblem,
   session,
@@ -248,6 +250,12 @@ async function finish() {
     } finally {
       running.value = false
     }
+  }
+  // 還有沒勾的（例如一次選超過上限）就回選取頁接著傳下一批，都傳完才回首頁
+  const left = finishBatch((p) => sizeProblem(p, albumConfig) === '', wedding.maxUploadCount)
+  if (left > 0) {
+    router.back()
+    return
   }
   resetUploadFlow()
   router.push({ name: 'feed' })

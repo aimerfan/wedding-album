@@ -144,6 +144,8 @@ export const uploadFlow = reactive({
   picked: [] as PickedMedia[],
   selectedIds: [] as string[],
   draft: emptyDraft(),
+  /** 剛傳完一批、還有沒傳的回到選取頁時，告訴賓客剛剛傳了什麼（例如「3 張照片」）。顯示過就清掉 */
+  uploadedSummary: '',
 })
 
 function emptyDraft(): UploadDraft {
@@ -179,9 +181,49 @@ export function addPicked(files: File[]): PickedMedia[] {
   return added
 }
 
+/** 清空待選區時拿走的內容，按「復原」時放回去 */
+export interface PickedSnapshot {
+  picked: PickedMedia[]
+  selectedIds: string[]
+}
+
+/** 清空待選區。預覽網址先不回收，復原時還要用；確定不復原時交給 discardPicked */
+export function takePicked(): PickedSnapshot {
+  const snapshot = { picked: uploadFlow.picked, selectedIds: uploadFlow.selectedIds }
+  uploadFlow.picked = []
+  uploadFlow.selectedIds = []
+  return snapshot
+}
+
+export function restorePicked(snapshot: PickedSnapshot) {
+  uploadFlow.picked = snapshot.picked
+  uploadFlow.selectedIds = snapshot.selectedIds
+}
+
+export function discardPicked(snapshot: PickedSnapshot) {
+  for (const p of snapshot.picked) URL.revokeObjectURL(p.previewUrl)
+}
+
+/**
+ * 一批傳完：拿掉傳好的與傳不了的（太大），沒勾的留在待選區給下一批，並預設勾起前 limit 個。
+ * 祝福清空，不然下一批會再送一次同樣的祝福；分類留著，同一次多半是同一類。回傳還剩幾個
+ */
+export function finishBatch(canUpload: (item: PickedMedia) => boolean, limit: number): number {
+  const sent = new Set(uploadFlow.selectedIds)
+  const keep = uploadFlow.picked.filter((p) => !sent.has(p.id) && canUpload(p))
+  for (const p of uploadFlow.picked) if (!keep.includes(p)) URL.revokeObjectURL(p.previewUrl)
+
+  uploadFlow.uploadedSummary = describeMedia(uploadFlow.picked.filter((p) => sent.has(p.id)))
+  uploadFlow.picked = keep
+  uploadFlow.selectedIds = keep.slice(0, limit).map((p) => p.id)
+  uploadFlow.draft = { ...uploadFlow.draft, blessing: '' }
+  return keep.length
+}
+
 export function resetUploadFlow() {
   revokePicked()
   uploadFlow.picked = []
   uploadFlow.selectedIds = []
   uploadFlow.draft = emptyDraft()
+  uploadFlow.uploadedSummary = ''
 }
