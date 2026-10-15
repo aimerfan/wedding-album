@@ -318,7 +318,13 @@ onBeforeRouteLeave(() => {
           <p class="identity-label">以此暱稱發布</p>
           <p class="identity-name">{{ nickname }}</p>
         </div>
-        <button class="identity-change" type="button" @click="router.push({ name: 'welcome' })">
+        <!-- 上傳中換暱稱會離開這頁、中斷上傳，先停用 -->
+        <button
+          class="identity-change"
+          type="button"
+          :disabled="running"
+          @click="router.push({ name: 'welcome' })"
+        >
           更改
         </button>
       </div>
@@ -616,8 +622,14 @@ onBeforeRouteLeave(() => {
   margin-left: -9px;
 }
 
-.item-fields:disabled {
-  opacity: 0.6;
+/* 上傳中（或這張已經傳好）不能再改：整塊變淡，一看就知道按不了 */
+.item-fields:disabled,
+.settings:disabled {
+  opacity: 0.5;
+}
+
+.settings:disabled .tag {
+  cursor: default;
 }
 
 .add {
@@ -750,11 +762,9 @@ onBeforeRouteLeave(() => {
   color: var(--c-rose);
 }
 
-
-
-
-
-
+.identity-change:disabled {
+  opacity: 0.4;
+}
 
 .settings {
   margin: 14px 0 0;
