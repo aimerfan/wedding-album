@@ -5,6 +5,7 @@
 export type GuestId = string
 export type PhotoId = string
 export type BlessingId = string
+export type CommentId = string
 
 /** 賓客。這個 app 不做帳號密碼，賓客只留暱稱。 */
 export interface Guest {
@@ -41,6 +42,8 @@ export interface Photo {
   /** ISO 8601，EXIF 取得，可能沒有 */
   takenAt?: string | null
   likeCount: number
+  /** 照片下的留言數 */
+  commentCount: number
   /** 目前這位賓客按過讚沒 */
   likedByMe: boolean
   favoritedByMe: boolean
@@ -55,6 +58,18 @@ export interface Photo {
 export interface Page<T> {
   items: T[]
   nextCursor: string | null
+}
+
+/** 照片下的留言。任何賓客都能留；照片上的文字（caption）是上傳者寫的，不是留言 */
+export interface Comment {
+  id: CommentId
+  photoId: PhotoId
+  guest: Guest
+  text: string
+  /** ISO 8601 */
+  createdAt: string
+  /** 最後一次修改的時間，沒改過是 null。用來標示「已編輯」 */
+  editedAt: string | null
 }
 
 /** 留言牆上的祝福。照片上的文字是 Photo.caption，不是祝福 */

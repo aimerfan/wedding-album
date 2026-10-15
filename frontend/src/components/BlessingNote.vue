@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { session } from '@/stores/session'
 import type { Blessing } from '@/types/album'
+import { relativeTime } from '@/utils/time'
 
 /**
  * 一則祝福，像一張便條紙。留言牆與「我的 → 我的祝福」共用。
@@ -18,17 +19,6 @@ const emit = defineEmits<{ edit: [Blessing]; delete: [Blessing] }>()
 const mine = computed(() => !!session.guestId && props.blessing.guest.id === session.guestId)
 /** 真正的權限由後端把關，這裡只決定要不要顯示選單 */
 const canDelete = computed(() => mine.value || session.isAdmin)
-
-/** 把 ISO 時間轉成「剛剛 / 12 分鐘前 / 1 小時前」 */
-function relativeTime(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const minutes = Math.floor(diffMs / 60000)
-  if (minutes < 1) return '剛剛'
-  if (minutes < 60) return minutes + ' 分鐘前'
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return hours + ' 小時前'
-  return Math.floor(hours / 24) + ' 天前'
-}
 
 const menuOpen = ref(false)
 const root = ref<HTMLElement>()

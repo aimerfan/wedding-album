@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { deletePhoto, editPhoto, fetchPhoto, setFavorited, setLiked } from '@/api/photos'
 import MarkPicker from '@/components/MarkPicker.vue'
+import PhotoComments from '@/components/PhotoComments.vue'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
 import { useAlbumConfig } from '@/composables/useAlbumConfig'
 import { PHOTO_TAGS, tagLabel } from '@/config/photoTags'
@@ -274,6 +275,12 @@ async function removeCaption() {
   if (!(await send(target, { caption: null })) && !editing.value) actionError.value = editError.value
 }
 
+/** 留言數變了（新增、刪除）：換進列表，回到相簿或下次打開時數字才對 */
+function onCommentCount(count: number) {
+  const p = photo.value
+  if (p && p.commentCount !== count) apply({ ...p, commentCount: count })
+}
+
 function toggleFavorite() {
   toggle(
     (p) => ({ ...p, favoritedByMe: !p.favoritedByMe }),
@@ -459,6 +466,9 @@ function toggleFavorite() {
       <button v-else-if="isMine" class="caption-add" type="button" @click="startEdit">
         ＋ 為這張說點什麼
       </button>
+
+      <!-- key：換張時整個重來，不會短暫顯示上一張的留言 -->
+      <PhotoComments :key="photo.id" :photo-id="photo.id" @count="onCommentCount" />
     </section>
   </main>
 

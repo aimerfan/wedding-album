@@ -12,6 +12,7 @@ export interface AlbumConfig {
   videoUploadConcurrency: number
   maxBlessingLength: number
   maxCaptionLength: number
+  maxCommentLength: number
   uploadsOpen: boolean
   /** 管理員設定的 Kahoot! 連結，沒設是 null */
   kahootUrl: string | null
