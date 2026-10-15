@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ScriptHeart from '@/components/ScriptHeart.vue'
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
@@ -114,7 +115,7 @@ async function enter() {
 
     <div class="content">
       <h1 class="names">
-        {{ wedding.groomName }} <span class="amp">&amp;</span> {{ wedding.brideName }}
+        {{ wedding.groomName }} <ScriptHeart class="amp" /> {{ wedding.brideName }}
       </h1>
 
       <DecoDivider />
@@ -266,8 +267,6 @@ async function enter() {
 }
 
 .amp {
-  font-family: var(--f-display);
-  font-style: italic;
   color: var(--c-rose);
   margin: 0 4px;
 }

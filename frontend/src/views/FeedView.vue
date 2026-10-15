@@ -1,4 +1,5 @@
 <script lang="ts">
+import ScriptHeart from '@/components/ScriptHeart.vue'
 import { ref } from 'vue'
 
 // 放在元件外面：從照片詳情返回首頁時，仍停在原本選的分類
@@ -76,7 +77,7 @@ function ratioOf(p: { width: number; height: number }) {
         <div>
           <p class="date-en">{{ wedding.dateDisplayEn }}</p>
           <h1 class="names">
-            {{ wedding.groomName }} <span class="amp">&amp;</span> {{ wedding.brideName }}
+            {{ wedding.groomName }} <ScriptHeart class="amp" /> {{ wedding.brideName }}
           </h1>
           <p v-if="stats" class="stats">
             共 {{ stats.photoCount }} 張回憶 · {{ stats.guestCount }} 位賓客
@@ -198,8 +199,6 @@ function ratioOf(p: { width: number; height: number }) {
 }
 
 .amp {
-  font-family: var(--f-display);
-  font-style: italic;
   color: var(--c-rose);
 }
 
