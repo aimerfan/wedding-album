@@ -54,9 +54,30 @@ function release() {
   target = null
 }
 
+/**
+ * 上次對齊時的格寬。手機轉向、視窗縮放後每格變寬或變窄，原本的 scrollLeft 會停在兩張中間，
+ * 用新寬度去算張數會跳到別張，所以寬度一變就先不動畫地捲回目前這張。
+ */
+let width = 0
+
+/** 寬度變了就重新對齊並回傳 true，這次的 scroll 事件不能拿來改 current */
+function realign() {
+  const el = track.value
+  if (!el || el.clientWidth === width) return false
+  width = el.clientWidth
+  if (width === 0) return true
+  target = current.value
+  el.scrollTo({ left: current.value * width, behavior: 'instant' })
+  // 已經在位置上就不會有 scroll 事件來清掉 target，這裡自己清
+  if (Math.abs(el.scrollLeft - current.value * width) < 1) target = null
+  return true
+}
+
 function onScroll() {
   const el = track.value
   if (!el) return
+  // 轉向時 scroll 事件可能比 ResizeObserver 先到，這裡也要先檢查寬度
+  if (realign()) return
   if (target !== null) {
     if (Math.abs(el.scrollLeft - target * el.clientWidth) < 1) target = null
     return
@@ -76,12 +97,20 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'ArrowRight' && current.value < props.slides.length - 1) current.value++
 }
 
+// 手機轉向、橫放版面切換時格寬會變，要重新對齊到目前這張
+const resizer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => realign())
+
 onMounted(() => {
+  width = track.value?.clientWidth ?? 0
   scrollToCurrent('instant')
   window.addEventListener('keydown', onKey)
+  if (track.value) resizer?.observe(track.value)
 })
 
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
+  resizer?.disconnect()
+})
 </script>
 
 <template>

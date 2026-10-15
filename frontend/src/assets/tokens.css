@@ -35,6 +35,8 @@
   --c-dark-ink: #ffffff;
   --c-dark-ink-mute: rgba(255, 255, 255, 0.7);
   --c-dark-line: rgba(255, 255, 255, 0.2);
+  --c-dark-stage: #000000; /* 照片詳情橫放全螢幕時的底色 */
+  --c-dark-scrim: rgba(0, 0, 0, 0.55); /* 橫放時浮在照片上的資訊條 */
 
   /* 字體 */
   --f-serif: 'Noto Serif TC', 'Songti TC', 'PingFang TC', serif;
@@ -51,6 +53,9 @@
   --tabbar-height: 49px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* 手機橫放時瀏海在左右兩側 */
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   /* 各畫面頂部內距：設計稿的 56px 是狀態列高度，真實裝置改用 safe-area */
   --page-top: calc(var(--safe-top) + 16px);
   --page-bottom: calc(var(--tabbar-height) + var(--safe-bottom));

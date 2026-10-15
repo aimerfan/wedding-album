@@ -34,7 +34,6 @@ def get_manifest():
             "description": "婚禮相片分享相簿",
             "lang": "zh-Hant",
             "display": "standalone",
-            "orientation": "portrait",
             "start_url": start_url,
             "scope": "/",
             "theme_color": "#FAF6F0",
