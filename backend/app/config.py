@@ -43,6 +43,7 @@ def load() -> dict:
         # 影片動輒上百 MB，跟照片一起搶會場網路會讓每個檔案都變慢，預設一次只傳一支
         "VIDEO_UPLOAD_CONCURRENCY": _int("VIDEO_UPLOAD_CONCURRENCY", 1),
         "MAX_BLESSING_LENGTH": _int("MAX_BLESSING_LENGTH", 200),
+        "MAX_CAPTION_LENGTH": _int("MAX_CAPTION_LENGTH", 200),
         # 接續碼幾分鐘內有效
         "TRANSFER_CODE_MINUTES": _int("TRANSFER_CODE_MINUTES", 30),
         "UPLOADS_OPEN": _bool("UPLOADS_OPEN", True),

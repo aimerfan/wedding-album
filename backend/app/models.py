@@ -112,6 +112,10 @@ class Photo(db.Model):
     content_hash: Mapped[str | None] = mapped_column(String(64))
     # 從 EXIF 讀出的拍攝時間，讀不到就是 None
     taken_at: Mapped[datetime | None]
+    # 上傳者對這張照片的說明（選填）。只有上傳者能寫，顯示在照片下方
+    caption: Mapped[str | None] = mapped_column(String(1000))
+    # 說明最後一次修改的時間，上傳時寫的、還沒改過就是 None。前端用來標示「已編輯」
+    caption_edited_at: Mapped[datetime | None]
     uploaded_at: Mapped[datetime] = mapped_column(default=now, index=True)
     # 檔案在儲存層的位置（見 app/storage.py），不是網址
     original_key: Mapped[str] = mapped_column(String(128))
@@ -138,6 +142,8 @@ class Photo(db.Model):
             "uploadedAt": iso(self.uploaded_at),
             "takenAt": iso(self.taken_at),
             "tag": self.tag,
+            "caption": self.caption,
+            "captionEditedAt": iso(self.caption_edited_at),
         }
 
 
@@ -167,7 +173,8 @@ class Blessing(db.Model):
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default=lambda: _new_id("b_"))
     guest_id: Mapped[str] = mapped_column(ForeignKey("guests.id"), index=True)
     text: Mapped[str] = mapped_column(String(1000))
-    # 上傳照片時一起寫的祝福會掛在那批的第一張上；留言牆上的獨立祝福是 None
+    # 舊欄位：以前上傳照片時寫的祝福掛在這裡。啟動時會搬成照片說明（見 move_photo_blessings_to_captions），
+    # 之後一律是 None，留言牆上只有獨立的祝福
     photo_id: Mapped[str | None] = mapped_column(ForeignKey("photos.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(default=now, index=True)
     # 最後一次修改的時間，沒改過就是 None。前端用來標示「已編輯」
@@ -182,7 +189,6 @@ class Blessing(db.Model):
             "text": self.text,
             "createdAt": iso(self.created_at),
             "editedAt": iso(self.edited_at),
-            "photoId": self.photo_id,
         }
 
 
@@ -225,7 +231,7 @@ class WeddingPhoto(db.Model):
 
 
 def photos_to_json(photos: list[Photo], viewer_id: str | None) -> list[dict]:
-    """照片轉成 JSON，順便算好讚數、我按過讚沒、我收藏了沒、附帶的祝福。
+    """照片轉成 JSON，順便算好讚數、我按過讚沒、我收藏了沒。
 
     一整頁的照片各用一次查詢算完，不會變成「每張照片查三次」。
     """
@@ -253,21 +259,31 @@ def photos_to_json(photos: list[Photo], viewer_id: str | None) -> list[dict]:
                 )
             )
         )
-    # 一張照片理論上只會掛一則祝福；萬一有好幾則，取最早的
-    blessings: dict[str, str] = {}
-    for photo_id, text in db.session.execute(
-        db.select(Blessing.photo_id, Blessing.text)
-        .where(Blessing.photo_id.in_(ids))
-        .order_by(Blessing.created_at.desc())
-    ):
-        blessings[photo_id] = text
-
     result = []
     for p in photos:
         data = p._base_json()
-        data["blessing"] = blessings.get(p.id)
         data["likeCount"] = like_counts.get(p.id, 0)
         data["likedByMe"] = p.id in liked
         data["favoritedByMe"] = p.id in favorited
         result.append(data)
     return result
+
+
+def move_photo_blessings_to_captions() -> None:
+    """以前上傳照片時寫的祝福掛在那批的第一張上，現在改成照片說明，只顯示在照片下方。
+
+    啟動時執行，搬過的祝福會刪掉，所以重複執行不會有事。照片已經有說明、或作者不是上傳者時
+    （正常不會發生），祝福不搬，留在留言牆上，不讓任何一句話消失。
+    """
+    blessings = db.session.scalars(
+        db.select(Blessing).where(Blessing.photo_id.is_not(None)).order_by(Blessing.created_at)
+    ).all()
+    for blessing in blessings:
+        photo = db.session.get(Photo, blessing.photo_id)
+        if photo is not None and photo.caption is None and photo.uploader_id == blessing.guest_id:
+            photo.caption = blessing.text
+            photo.caption_edited_at = blessing.edited_at
+            db.session.delete(blessing)
+        else:
+            blessing.photo_id = None
+    db.session.commit()

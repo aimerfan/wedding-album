@@ -65,5 +65,6 @@ def create_app(overrides: dict | None = None) -> Flask:
         # 改了既有欄位不會自動套用，見 README 的「資料庫」
         db.create_all()
         upgrade_existing_tables()
+        models.move_photo_blessings_to_captions()
 
     return app

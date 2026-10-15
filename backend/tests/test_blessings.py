@@ -23,7 +23,6 @@ def test_post_blessing_to_wall(client, join):
     blessing = res.get_json()
     assert blessing["text"] == "新婚快樂！"  # 前後空白去掉
     assert blessing["guest"] == me
-    assert blessing["photoId"] is None
     assert blessing["createdAt"].endswith("+08:00")
 
 
@@ -79,42 +78,21 @@ def test_requires_token(client):
     assert client.get("/api/blessings").status_code == 401
 
 
-# --- 掛在照片上的祝福 -----------------------------------------------------
+# --- 照片上的文字改成照片說明 ---------------------------------------------
 
 
-def test_blessing_on_my_photo_shows_on_photo(client, join, add_photo):
+def test_photo_id_is_ignored(client, join, add_photo):
+    """舊版前端還會帶 photoId：照樣收下成留言牆上的祝福，不會掛到照片上。"""
     token, me = join("小慧")
     photo_id = add_photo(me["id"])
 
     res = _post(client, token, text="祝你們白頭偕老", photoId=photo_id)
 
     assert res.status_code == 201
+    assert "photoId" not in res.get_json()
     photo = client.get(f"/api/photos/{photo_id}", headers=auth(token)).get_json()
-    assert photo["blessing"] == "祝你們白頭偕老"
-    # 也會出現在留言牆
-    assert _wall(client, token)["items"][0]["photoId"] == photo_id
-
-
-def test_cannot_attach_to_someone_elses_photo(client, join, add_photo):
-    _, hui = join("小慧")
-    kai, _ = join("阿凱")
-    photo_id = add_photo(hui["id"])
-
-    res = _post(client, kai, text="借放一下", photoId=photo_id)
-
-    assert res.status_code == 403
-    assert res.get_json()["error"]["code"] == "not_your_photo"
-
-
-def test_attach_to_missing_photo_is_404(client, join):
-    token, _ = join("小慧")
-    assert _post(client, token, text="嗨", photoId="p_nope").status_code == 404
-
-
-def test_photo_without_blessing_is_null(client, join, add_photo):
-    token, me = join("小慧")
-    photo_id = add_photo(me["id"])
-    assert client.get(f"/api/photos/{photo_id}", headers=auth(token)).get_json()["blessing"] is None
+    assert photo["caption"] is None
+    assert "blessing" not in photo
 
 
 # --- 統計 -----------------------------------------------------------------
@@ -214,17 +192,6 @@ def test_delete_my_blessing(client, join):
     assert res.status_code == 204
     assert _wall(client, token)["items"] == []
     assert client.get("/api/me", headers=auth(token)).get_json()["stats"]["blessings"] == 0
-
-
-def test_delete_blessing_on_photo_clears_it_from_photo(client, join, add_photo):
-    token, me = join("小慧")
-    photo_id = add_photo(me["id"])
-    blessing_id = _post(client, token, text="祝福", photoId=photo_id).get_json()["id"]
-
-    client.delete(f"/api/blessings/{blessing_id}", headers=auth(token))
-
-    photo = client.get(f"/api/photos/{photo_id}", headers=auth(token)).get_json()
-    assert photo["blessing"] is None
 
 
 def test_missing_blessing_is_404(client, join):
