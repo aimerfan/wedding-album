@@ -8,6 +8,7 @@ import MarkPicker from '@/components/MarkPicker.vue'
 import AppToast, { type Toast } from '@/components/AppToast.vue'
 import MediaLightbox from '@/components/MediaLightbox.vue'
 import MediaPreview from '@/components/MediaPreview.vue'
+import ProfileSheet from '@/components/ProfileSheet.vue'
 import { FALLBACK, useAlbumConfig } from '@/composables/useAlbumConfig'
 import { PHOTO_TAGS } from '@/config/photoTags'
 import { invalidateAll } from '@/stores/photoLists'
@@ -67,6 +68,9 @@ function startTyping(item: PickedMedia, event: FocusEvent) {
   typingId.value = item.id
   typingEl.value = event.target as HTMLTextAreaElement
 }
+
+/** 改暱稱：就地打開面板，不跳到歡迎頁（跳過去會丟下這頁選好的東西） */
+const profileOpen = ref(false)
 
 // --- 放大看、拿掉選錯的 ---------------------------------------------------
 
@@ -318,12 +322,12 @@ onBeforeRouteLeave(() => {
           <p class="identity-label">以此暱稱發布</p>
           <p class="identity-name">{{ nickname }}</p>
         </div>
-        <!-- 上傳中換暱稱會離開這頁、中斷上傳，先停用 -->
+        <!-- 上傳中先停用：上傳的請求已經帶著目前的身分送出了 -->
         <button
           class="identity-change"
           type="button"
           :disabled="running"
-          @click="router.push({ name: 'welcome' })"
+          @click="profileOpen = true"
         >
           更改
         </button>
@@ -437,6 +441,7 @@ onBeforeRouteLeave(() => {
     </section>
 
     <MediaLightbox v-model="zoomed" />
+    <ProfileSheet v-model="profileOpen" />
     <AppToast :toast="toast" />
 
     <div class="submit-bar">

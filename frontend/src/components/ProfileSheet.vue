@@ -4,7 +4,7 @@ import { ApiError } from '@/api/client'
 import { updateMe } from '@/api/guests'
 import { session, setProfile } from '@/stores/session'
 
-/** 「我的」頁改暱稱與「與新人的關係」 */
+/** 改暱稱與「與新人的關係」。「我的」頁、上傳頁、寫祝福的面板共用，就地改、不離開目前的畫面 */
 const open = defineModel<boolean>({ required: true })
 
 const nickname = ref('')
@@ -40,7 +40,7 @@ async function save() {
 
 <template>
   <Transition name="sheet">
-    <div v-if="open" class="overlay" @click.self="open = false">
+    <div v-if="open" class="profile-overlay" @click.self="open = false">
       <form class="sheet" role="dialog" aria-label="編輯個人資料" @submit.prevent="save">
         <span class="grip" />
         <div class="sheet-head">
@@ -86,11 +86,15 @@ async function save() {
 </template>
 
 <style scoped>
-.overlay {
+/*
+ * 不叫 .overlay：放進寫祝福的面板時，外層元件的 scoped 樣式會套到這裡的根元素上，
+ * 它的 .overlay（z-index 40）會蓋掉這裡的設定，改名面板就跑到寫祝福面板底下
+ */
+.profile-overlay {
   position: fixed;
   inset: 0;
-  /* 要蓋過 AppTabBar（30） */
-  z-index: 40;
+  /* 要蓋過 AppTabBar（30），也要蓋過寫祝福的面板（40）：從那裡也能打開 */
+  z-index: 45;
   display: flex;
   align-items: flex-end;
   background: rgba(61, 46, 38, 0.35);
