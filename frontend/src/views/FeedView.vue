@@ -85,8 +85,63 @@ const columnB = computed(() => list.value.items.filter((_, i) => i % 2 === 1))
 const stats = ref<AlbumStats | null>(null)
 
 function select(chip: Chip) {
+  slide.value = ''
   activeChip.value = chip.id
 }
+
+// --- 左右滑動切換分類 -----------------------------------------------------
+// 只在手指離開時判斷一次（不跟著手指移動），上下捲動完全交給瀏覽器。
+// 從分類列、搜尋框開始的滑動不算（分類列自己會橫向捲動）；
+// 從螢幕左右邊緣開始的也不算，那是 Android 的返回、iPhone Safari 的上一頁手勢。
+
+const SWIPE_MIN = 45
+const EDGE = 24
+let touchStart: { x: number; y: number; t: number } | null = null
+
+/** 這次換分類的動畫方向：滑動才有，點分類不動畫 */
+const slide = ref<'' | 'from-right' | 'from-left'>('')
+
+function onTouchStart(e: TouchEvent) {
+  touchStart = null
+  const t = e.touches[0]
+  if (e.touches.length !== 1 || !t) return
+  if ((e.target as Element).closest('.chips, .search')) return
+  if (t.clientX < EDGE || t.clientX > window.innerWidth - EDGE) return
+  touchStart = { x: t.clientX, y: t.clientY, t: e.timeStamp }
+}
+
+function onTouchCancel() {
+  touchStart = null
+}
+
+function onTouchEnd(e: TouchEvent) {
+  const start = touchStart
+  touchStart = null
+  const t = e.changedTouches[0]
+  if (!start || !t) return
+  const dx = t.clientX - start.x
+  const dy = t.clientY - start.y
+  // 要夠長、明顯是橫的、而且是一下甩過去的（慢慢拖比較像在看照片）
+  if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return
+  if (e.timeStamp - start.t > 800) return
+  const i = chips.findIndex((c) => c.id === activeChip.value)
+  const next = chips[i + (dx < 0 ? 1 : -1)]
+  if (!next) return
+  slide.value = dx < 0 ? 'from-right' : 'from-left'
+  activeChip.value = next.id
+  // 換到新的分類就從頭看，不要停在上一個分類捲到的位置
+  window.scrollTo({ top: 0 })
+}
+
+// 換了分類，分類列捲到讓它露出來（只捲分類列，不動整頁的上下位置）
+const chipsEl = ref<HTMLElement>()
+watch(activeChip, async (id) => {
+  await nextTick()
+  const box = chipsEl.value
+  const el = box?.querySelector<HTMLElement>(`[data-chip="${id}"]`)
+  if (!box || !el) return
+  box.scrollTo({ left: el.offsetLeft - (box.clientWidth - el.clientWidth) / 2, behavior: 'smooth' })
+})
 
 async function more() {
   // 正在載入就不重複觸發；載完由那一次負責接著檢查
@@ -117,7 +172,12 @@ function ratioOf(p: { width: number; height: number }) {
 </script>
 
 <template>
-  <main class="feed">
+  <main
+    class="feed"
+    @touchstart.passive="onTouchStart"
+    @touchend.passive="onTouchEnd"
+    @touchcancel.passive="onTouchCancel"
+  >
     <header class="head">
       <div class="head-row">
         <div>
@@ -178,10 +238,11 @@ function ratioOf(p: { width: number; height: number }) {
         </button>
       </form>
 
-      <div class="chips">
+      <div ref="chipsEl" class="chips">
         <button
           v-for="c in chips"
           :key="c.id"
+          :data-chip="c.id"
           type="button"
           class="chip"
           :class="{ active: activeChip === c.id }"
@@ -192,7 +253,8 @@ function ratioOf(p: { width: number; height: number }) {
       </div>
     </header>
 
-    <div class="masonry">
+    <!-- key：換分類時整塊重畫，滑動的進場動畫才會每次都播 -->
+    <div :key="activeChip" class="masonry" :class="slide">
       <div class="column">
         <RouterLink
           v-for="p in columnA"
@@ -260,6 +322,8 @@ function ratioOf(p: { width: number; height: number }) {
 .feed {
   background: var(--c-bg);
   min-height: var(--screen-h);
+  /* 滑動切換的進場動畫會往旁邊超出一點，不能讓整頁變成可以左右捲 */
+  overflow-x: clip;
 }
 
 .head {
@@ -377,6 +441,8 @@ function ratioOf(p: { width: number; height: number }) {
 
 
 .chips {
+  /* 讓分類按鈕的 offsetLeft 以這裡為準，換分類時才算得出要捲多少 */
+  position: relative;
   margin-top: 18px;
   display: flex;
   gap: 8px;
@@ -411,6 +477,28 @@ function ratioOf(p: { width: number; height: number }) {
   padding: 0 16px;
   display: flex;
   gap: 10px;
+}
+
+.masonry.from-right {
+  animation: slide-from-right 0.25s ease-out;
+}
+
+.masonry.from-left {
+  animation: slide-from-left 0.25s ease-out;
+}
+
+@keyframes slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+@keyframes slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
 }
 
 .column {
