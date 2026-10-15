@@ -110,8 +110,6 @@ async function enter() {
       <PhotoTile :index="0" ratio="auto" class="hero-photo" />
       <div class="hero-fade" />
       <p class="kicker">{{ wedding.kicker }}</p>
-      <!-- 長輩一進來就看得到：右上角的「Aa」可以把字放大 -->
-      <TextSizePicker compact class="text-size" />
     </div>
 
     <div class="content">
@@ -132,6 +130,9 @@ async function enter() {
       </p>
 
       <KahootLink />
+
+      <!-- 長輩不一定知道可以放大字，直接列在要填的欄位旁邊 -->
+      <TextSizePicker class="text-size-row" label="字太小嗎？" />
 
       <label class="field">
         <span class="field-label">你的名字</span>
@@ -214,7 +215,7 @@ async function enter() {
  */
 .hero {
   position: relative;
-  height: clamp(220px, var(--screen-h) - 470px, 380px);
+  height: clamp(220px, var(--screen-h) - 519px, 380px);
   overflow: hidden;
 }
 
@@ -229,19 +230,11 @@ async function enter() {
   background: linear-gradient(180deg, transparent 0%, transparent 50%, var(--c-bg) 100%);
 }
 
-.text-size {
-  position: absolute;
-  top: calc(var(--safe-top) + 20px);
-  right: 16px;
-  z-index: 5;
-}
-
 .kicker {
   position: absolute;
   top: calc(var(--safe-top) + 32px);
-  /* 左右讓出右上角「Aa」的寬度，字放大時才不會疊在一起 */
-  left: 60px;
-  right: 60px;
+  left: 16px;
+  right: 16px;
   margin: 0;
   text-align: center;
   color: #fff;
@@ -297,6 +290,15 @@ async function enter() {
   color: var(--c-ink-soft);
 }
 
+/* 不做成卡片：看起來才像一句提示，不會被當成另一個要填的欄位 */
+.text-size-row {
+  justify-content: center;
+}
+
+.text-size-row :deep(.label) {
+  flex: none;
+}
+
 .field {
   margin-top: 14px;
   width: 100%;
@@ -312,7 +314,7 @@ async function enter() {
 .field-label {
   font-size: 11px;
   letter-spacing: 1.5px;
-  color: var(--c-ink-mute);
+  color: var(--c-ink-soft);
 }
 
 .field-input {

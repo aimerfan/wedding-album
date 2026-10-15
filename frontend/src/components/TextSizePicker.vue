@@ -1,30 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { setTextSize, TEXT_SIZES, textSize } from '@/stores/textSize'
 
 /**
- * 選字體大小。歡迎頁用 compact（右上角一個「Aa」，點開才有選項），「我的」頁直接列出來。
+ * 選字體大小，三個選項直接列出來。歡迎頁與「我的」頁共用，歡迎頁換成比較口語的說明。
  */
-defineProps<{ compact?: boolean }>()
-
-const open = ref(false)
+const { label = '字體大小' } = defineProps<{ label?: string }>()
 </script>
 
 <template>
-  <div class="picker" :class="{ compact }">
-    <button
-      v-if="compact"
-      class="aa"
-      type="button"
-      aria-label="字體大小"
-      :aria-expanded="open"
-      @click="open = !open"
-    >
-      <span class="aa-mark"><span class="aa-small">A</span><span class="aa-big">A</span></span>
-    </button>
-
-    <div v-if="!compact || open" class="options" role="radiogroup" aria-label="字體大小">
-      <span v-if="!compact" class="label">字體大小</span>
+  <div class="options" role="radiogroup" aria-label="字體大小">
+    <span class="label">
+      <span class="aa" aria-hidden="true"><span class="aa-small">A</span>A</span>
+      {{ label }}
+    </span>
+    <span class="choices">
       <button
         v-for="s in TEXT_SIZES"
         :key="s.id"
@@ -37,77 +26,56 @@ const open = ref(false)
       >
         {{ s.label }}
       </button>
-    </div>
+    </span>
   </div>
 </template>
 
 <style scoped>
-.picker {
-  position: relative;
-}
-
-.aa {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: var(--c-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 兩個 A 對齊底線，整組置中在圓裡；用系統的無襯線粗體，小尺寸才清楚 */
-.aa-mark {
-  display: flex;
-  align-items: baseline;
-  gap: 1px;
-  line-height: 1;
-  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  font-weight: 700;
-}
-
-.aa-small {
-  font-size: 12px;
-}
-
-.aa-big {
-  font-size: 17px;
-}
-
+/* 字放到大或特大時一行放不下：說明不折行，按鈕整組換到下一行 */
 .options {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px 6px;
 }
 
-/* 歡迎頁：從「Aa」底下彈出來 */
-.compact .options {
-  position: absolute;
-  top: 46px;
-  right: 0;
-  z-index: 10;
-  padding: 6px;
+/* 分段按鈕：三格包在同一條裡，一看就知道是「三選一」，也跟一般的文字段落分得開 */
+.choices {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
   border-radius: 20px;
-  background: var(--c-card);
-  box-shadow: var(--shadow-raised);
+  background: var(--c-bg-deep);
 }
 
 .label {
   flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
   font-size: 13px;
   color: var(--c-ink-soft);
 }
 
+/* 「Aa」圖示：一大一小兩個 A，一眼就知道跟字的大小有關 */
+.aa {
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--c-ink);
+}
+
+.aa-small {
+  font-size: 11px;
+}
+
 .option {
   min-width: 52px;
-  height: 34px;
+  height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--c-line-strong);
+  border: 0;
   border-radius: 17px;
   background: transparent;
   color: var(--c-ink-soft);
@@ -128,7 +96,6 @@ const open = ref(false)
 }
 
 .option.active {
-  border-color: transparent;
   background: var(--c-rose);
   color: #fff;
 }
