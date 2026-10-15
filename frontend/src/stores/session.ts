@@ -148,6 +148,8 @@ export const uploadFlow = reactive({
   picked: [] as PickedMedia[],
   selectedIds: [] as string[],
   draft: emptyDraft(),
+  /** 剛傳完一批、還有沒傳的回到選取頁時，告訴賓客剛剛傳了什麼（例如「3 張照片」）。顯示過就清掉 */
+  uploadedSummary: '',
 })
 
 function emptyDraft(): UploadDraft {
@@ -158,9 +160,68 @@ function revokePicked() {
   for (const p of uploadFlow.picked) URL.revokeObjectURL(p.previewUrl)
 }
 
-export function setPicked(items: PickedMedia[]) {
-  revokePicked()
-  uploadFlow.picked = items
+/** 每個選到的檔案一個 id。不用檔名：同一批裡可能有同名的檔案 */
+let pickedSeq = 0
+
+/**
+ * 不比 lastModified：有些手機每次叫出選取器都會重新產生檔案，同一張照片的時間會不一樣。
+ * 檔名與大小都相同的兩張不同照片幾乎不會出現
+ */
+function isSameFile(a: File, b: File) {
+  return a.name === b.name && a.size === b.size
+}
+
+/** 選取器選完（含「再選」）：接在已選的後面，同一個檔案選第二次就略過。回傳實際加進來的 */
+export function addPicked(files: File[]): PickedMedia[] {
+  const added = files
+    .filter((file) => !uploadFlow.picked.some((p) => isSameFile(p.file, file)))
+    .map((file) => ({
+      id: `m${++pickedSeq}`,
+      file,
+      kind: kindOf(file),
+      previewUrl: URL.createObjectURL(file),
+    }))
+  uploadFlow.picked = [...uploadFlow.picked, ...added]
+  return added
+}
+
+/** 清空待選區時拿走的內容，按「復原」時放回去 */
+export interface PickedSnapshot {
+  picked: PickedMedia[]
+  selectedIds: string[]
+}
+
+/** 清空待選區。預覽網址先不回收，復原時還要用；確定不復原時交給 discardPicked */
+export function takePicked(): PickedSnapshot {
+  const snapshot = { picked: uploadFlow.picked, selectedIds: uploadFlow.selectedIds }
+  uploadFlow.picked = []
+  uploadFlow.selectedIds = []
+  return snapshot
+}
+
+export function restorePicked(snapshot: PickedSnapshot) {
+  uploadFlow.picked = snapshot.picked
+  uploadFlow.selectedIds = snapshot.selectedIds
+}
+
+export function discardPicked(snapshot: PickedSnapshot) {
+  for (const p of snapshot.picked) URL.revokeObjectURL(p.previewUrl)
+}
+
+/**
+ * 一批傳完：拿掉傳好的與傳不了的（太大），沒勾的留在待選區給下一批，並預設勾起前 limit 個。
+ * 祝福清空，不然下一批會再送一次同樣的祝福；分類留著，同一次多半是同一類。回傳還剩幾個
+ */
+export function finishBatch(canUpload: (item: PickedMedia) => boolean, limit: number): number {
+  const sent = new Set(uploadFlow.selectedIds)
+  const keep = uploadFlow.picked.filter((p) => !sent.has(p.id) && canUpload(p))
+  for (const p of uploadFlow.picked) if (!keep.includes(p)) URL.revokeObjectURL(p.previewUrl)
+
+  uploadFlow.uploadedSummary = describeMedia(uploadFlow.picked.filter((p) => sent.has(p.id)))
+  uploadFlow.picked = keep
+  uploadFlow.selectedIds = keep.slice(0, limit).map((p) => p.id)
+  uploadFlow.draft = { ...uploadFlow.draft, blessing: '' }
+  return keep.length
 }
 
 export function resetUploadFlow() {
@@ -168,4 +229,5 @@ export function resetUploadFlow() {
   uploadFlow.picked = []
   uploadFlow.selectedIds = []
   uploadFlow.draft = emptyDraft()
+  uploadFlow.uploadedSummary = ''
 }
