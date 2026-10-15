@@ -117,6 +117,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
   "uploadedAt": "2026-10-17T18:42:00+08:00",
   "takenAt": "2026-10-17T18:40:12+08:00",
   "likeCount": 12,
+  "commentCount": 3,
   "likedByMe": false,
   "favoritedByMe": false,
   "tag": "banquet",
@@ -139,6 +140,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
   `throwback`（那些年：婚禮以前跟新人的舊照片）其中一個，上傳時由賓客選，之後可以改。
 - `caption`：上傳者對這張照片的說明，選填，沒有是 `null`。顯示在照片下方，**不會出現在留言牆**。
   `captionEditedAt` 是說明最後一次修改的時間，上傳時寫的、還沒改過是 `null`，前端用來標示「已編輯」。
+- `commentCount`：照片下的留言數，見下方「留言」。
 - `likedByMe`：我有沒有按讚。讚是**公開的**，所有人都看得到 `likeCount`，會算進上傳者的「獲得的讚」。
 - `favoritedByMe`：我有沒有收藏。收藏是**私人的**書籤，只出現在自己「我的 → 收藏」，別人看不到、也不計數。
 
@@ -155,6 +157,23 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 ```
 
 祝福只在留言牆上，不附照片。照片上的文字是 Photo 的 `caption`。
+- `editedAt`：最後一次修改的時間，沒改過是 `null`。前端可以用它標示「已編輯」。
+
+### Comment
+
+照片下的留言。
+
+```json
+{
+  "id": "c_1",
+  "photoId": "p_1",
+  "guest": { "id": "g_2", "nickname": "阿凱" },
+  "text": "拍得真好！",
+  "createdAt": "2026-10-17T19:30:00+08:00",
+  "editedAt": null
+}
+```
+
 - `editedAt`：最後一次修改的時間，沒改過是 `null`。前端可以用它標示「已編輯」。
 
 ### WeddingPhoto
@@ -316,7 +335,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 
 按讚、收藏用 `PUT` / `DELETE`：重複按不會出錯，網路不穩重送也安全。回應是更新後的 Photo。
 
-**刪除照片**時，照片檔、讚、收藏、說明一併刪掉。不是上傳者也不是管理員時回 `403`、`code` 為 `not_your_photo`。
+**刪除照片**時，照片檔、讚、收藏、說明、留言一併刪掉。不是上傳者也不是管理員時回 `403`、`code` 為 `not_your_photo`。
 
 `PATCH /api/photos/{id}`
 
@@ -419,6 +438,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
   "videoUploadConcurrency": 1,
   "maxBlessingLength": 200,
   "maxCaptionLength": 200,
+  "maxCommentLength": 200,
   "uploadsOpen": true,
   "kahootUrl": "https://kahoot.it/?pin=1234567"
 }
@@ -490,6 +510,44 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 **預先匯入的祝福**：婚禮前收到的祝福，可以用後端指令匯入（見 `backend/README.md`）。
 它們的作者不是透過 app 加入的賓客，之後同名的人用手機加入，會被當成另一位賓客，
 在自己的「我的祝福」裡看不到匯入的那則。
+
+### 留言
+
+照片下的留言。跟照片上的文字（`caption`）不同：`caption` 只有上傳者能寫、一張一則；留言**任何賓客都能留**，一張照片可以有很多則。
+留言不會出現在留言牆，也不算進任何統計。
+
+| 方法 | 路徑 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/photos/{id}/comments` | 這張照片的所有留言 |
+| `POST` | `/api/photos/{id}/comments` | 留言 |
+| `PATCH` | `/api/comments/{id}` | 修改自己的留言，只能改 `text` |
+| `DELETE` | `/api/comments/{id}` | 刪除自己的留言；管理員可刪任何一則。回 `204` |
+
+以上都需要 token。
+
+```json
+// GET 回應：舊的在前（像聊天一樣往下接）。一張照片的留言不多，一次全部回傳，不分頁（沒有 nextCursor）
+{ "items": [ { "id": "c_1", ... } ] }
+
+// POST、PATCH 請求
+{ "text": "拍得真好！" }
+
+// POST 回應 201、PATCH 回應 200：Comment
+```
+
+- `text`：上限 200 字（`maxCommentLength`），前後空白會被去掉。
+- **照片的上傳者不能改、刪別人在自己照片下的留言**，跟祝福一樣只有作者本人與管理員；管理員只能刪，不能改。
+- 修改時 `createdAt` 不變，順序不會跳動；內容跟原本一樣時不算修改，`editedAt` 維持原樣。
+- **截止上傳後也可以留言**：截止只是不再收新的檔案。
+
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `invalid_body` | `400` | 請求內容不是 JSON 物件 |
+| `text_required` | `400` | 沒寫內容（只有空白也算） |
+| `text_too_long` | `400` | 超過字數 |
+| `photo_not_found` | `404` | 照片不存在 |
+| `comment_not_found` | `404` | 要改、刪的留言不存在 |
+| `not_your_comment` | `403` | 要改、刪的是別人的留言（管理員刪除除外） |
 
 ### 婚紗集
 

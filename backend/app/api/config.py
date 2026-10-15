@@ -52,6 +52,7 @@ def get_config():
             "videoUploadConcurrency": c["VIDEO_UPLOAD_CONCURRENCY"],
             "maxBlessingLength": c["MAX_BLESSING_LENGTH"],
             "maxCaptionLength": c["MAX_CAPTION_LENGTH"],
+            "maxCommentLength": c["MAX_COMMENT_LENGTH"],
             "uploadsOpen": c["UPLOADS_OPEN"],
             # 連結由管理員在 app 裡設定；開關沒打開時一律是 null，提早存好的連結不會被看到
             "kahootUrl": kahoot["url"] if kahoot["enabled"] else None,

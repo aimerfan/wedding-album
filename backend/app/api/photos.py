@@ -16,6 +16,7 @@ from app.models import (
     PHOTO_TAGS,
     TAIPEI,
     Blessing,
+    Comment,
     Favorite,
     Guest,
     Like,
@@ -328,7 +329,7 @@ def update_photo(photo_id: str):
 def delete_photo(photo_id: str):
     """刪除照片。上傳者可以刪自己的；管理員可以刪任何一張（例如不適當的照片）。
 
-    讚、收藏、說明一併刪掉。
+    讚、收藏、說明、留言一併刪掉。
     """
     photo = _get_photo_or_404(photo_id)
     if photo.uploader_id != g.guest.id and not g.guest.is_admin:
@@ -337,6 +338,7 @@ def delete_photo(photo_id: str):
     keys = [photo.original_key, photo.display_key, photo.thumb_key]
     db.session.execute(db.delete(Like).where(Like.photo_id == photo.id))
     db.session.execute(db.delete(Favorite).where(Favorite.photo_id == photo.id))
+    db.session.execute(db.delete(Comment).where(Comment.photo_id == photo.id))
     db.session.delete(photo)
     db.session.commit()
     # 資料庫刪成功之後才刪檔案；反過來的話，萬一資料庫失敗會留下一張打不開的照片

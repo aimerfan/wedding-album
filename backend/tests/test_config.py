@@ -17,6 +17,7 @@ def test_config_returns_limits(client):
         "videoUploadConcurrency": 1,
         "maxBlessingLength": 200,
         "maxCaptionLength": 200,
+        "maxCommentLength": 200,
         "uploadsOpen": True,
         "kahootUrl": None,
     }

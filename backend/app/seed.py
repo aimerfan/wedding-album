@@ -15,7 +15,7 @@ from PIL import Image, ImageChops
 from app import images, storage
 from app.auth import issue_token
 from app.db import db
-from app.models import Blessing, Guest, Like, Photo, WeddingPhoto, now
+from app.models import Blessing, Comment, Guest, Like, Photo, WeddingPhoto, now
 
 # (暱稱, 與新人的關係)
 GUESTS = [
@@ -56,6 +56,14 @@ BLESSINGS = [
     (4, "從小看著婷婷長大，今天看到她當新娘真的好美。願你們的婚姻甜甜蜜蜜，早生貴子。"),
     (3, "恭喜恭喜！"),
     (6, "兩個人在一起的樣子真好看。 ♥"),
+]
+
+# (留言的人在 GUESTS 的位置, 第幾張照片, 留言)。順序就是留言的先後
+COMMENTS = [
+    (0, 1, "哈哈哈這張拍得好！"),
+    (4, 1, "兩個人好登對 ♥"),
+    (1, 1, "謝謝大家～"),
+    (2, 6, "這道菜超好吃"),
 ]
 
 # (按讚的人在 GUESTS 的位置, 第幾張照片)
@@ -160,6 +168,16 @@ def seed_command(reset: bool):
                 created_at=now() - timedelta(minutes=5 * i),
             )
         )
+    for i, (guest_index, photo_index, text) in enumerate(COMMENTS):
+        db.session.add(
+            Comment(
+                guest=guests[guest_index],
+                photo_id=photos[photo_index].id,
+                text=text,
+                # 最後一則最新
+                created_at=now() - timedelta(minutes=len(COMMENTS) - i),
+            )
+        )
     for guest_index, photo_index in LIKES:
         db.session.add(Like(guest_id=guests[guest_index].id, photo_id=photos[photo_index].id))
 
@@ -185,6 +203,7 @@ def seed_command(reset: bool):
 
     click.echo(
         f"建立了 {len(guests)} 位賓客、{len(PHOTOS)} 張照片、{len(BLESSINGS)} 則祝福、"
+        f"{len(COMMENTS)} 則留言、"
         f"{len(LIKES)} 個讚、{len(WEDDING)} 張婚紗照。"
     )
     click.echo(f"照片檔在 {storage.media_dir()}")

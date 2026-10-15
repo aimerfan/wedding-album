@@ -167,6 +167,32 @@ class Favorite(db.Model):
     created_at: Mapped[datetime] = mapped_column(default=now, index=True)
 
 
+class Comment(db.Model):
+    """照片下的留言。任何賓客都能留，一張照片可以有很多則；照片上的文字（caption）是上傳者寫的，不是留言。"""
+
+    __tablename__ = "comments"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default=lambda: _new_id("c_"))
+    photo_id: Mapped[str] = mapped_column(ForeignKey("photos.id"), index=True)
+    guest_id: Mapped[str] = mapped_column(ForeignKey("guests.id"), index=True)
+    text: Mapped[str] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(default=now)
+    # 最後一次修改的時間，沒改過就是 None。前端用來標示「已編輯」
+    edited_at: Mapped[datetime | None]
+
+    guest: Mapped[Guest] = relationship(lazy="joined")
+
+    def to_json(self) -> dict:
+        return {
+            "id": self.id,
+            "photoId": self.photo_id,
+            "guest": self.guest.to_json(),
+            "text": self.text,
+            "createdAt": iso(self.created_at),
+            "editedAt": iso(self.edited_at),
+        }
+
+
 class Blessing(db.Model):
     __tablename__ = "blessings"
 
@@ -231,7 +257,7 @@ class WeddingPhoto(db.Model):
 
 
 def photos_to_json(photos: list[Photo], viewer_id: str | None) -> list[dict]:
-    """照片轉成 JSON，順便算好讚數、我按過讚沒、我收藏了沒。
+    """照片轉成 JSON，順便算好讚數、留言數、我按過讚沒、我收藏了沒。
 
     一整頁的照片各用一次查詢算完，不會變成「每張照片查三次」。
     """
@@ -242,6 +268,13 @@ def photos_to_json(photos: list[Photo], viewer_id: str | None) -> list[dict]:
     like_counts = dict(
         db.session.execute(
             db.select(Like.photo_id, func.count()).where(Like.photo_id.in_(ids)).group_by(Like.photo_id)
+        ).all()
+    )
+    comment_counts = dict(
+        db.session.execute(
+            db.select(Comment.photo_id, func.count())
+            .where(Comment.photo_id.in_(ids))
+            .group_by(Comment.photo_id)
         ).all()
     )
     liked: set[str] = set()
@@ -263,6 +296,7 @@ def photos_to_json(photos: list[Photo], viewer_id: str | None) -> list[dict]:
     for p in photos:
         data = p._base_json()
         data["likeCount"] = like_counts.get(p.id, 0)
+        data["commentCount"] = comment_counts.get(p.id, 0)
         data["likedByMe"] = p.id in liked
         data["favoritedByMe"] = p.id in favorited
         result.append(data)
