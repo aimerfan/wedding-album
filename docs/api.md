@@ -198,6 +198,7 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | `GET` | `/api/me` | ✓ | 目前這位賓客的資料與統計 |
 | `PATCH` | `/api/me` | ✓ | 改暱稱或與新人的關係 |
 | `POST` | `/api/me/transfer-codes` | ✓ | 產生接續連結 |
+| `POST` | `/api/guests/{id}/transfer-codes` | ✓ | 管理員替別人產生接續碼（找回身分） |
 | `POST` | `/api/me/admin` | ✓ | 用管理員代碼把自己開通成管理員 |
 
 前兩支是「領 token」的 API。這時賓客手上還沒有 token，所以這兩支不檢查 token，
@@ -260,6 +261,16 @@ HTTP 狀態碼表示錯誤類別，回應內容固定是這個形狀：
 | --- | --- | --- |
 | `invalid_transfer_code` | `401` | 接續碼不存在或已經用過 |
 | `transfer_code_expired` | `401` | 接續碼過期 |
+
+`POST /api/guests/{id}/transfer-codes`
+
+賓客原本的裝置不見了（換手機、清掉瀏覽器資料），自己產生不了接續碼時，由管理員替他產生。
+回應跟 `POST /api/me/transfer-codes` 一樣，接續碼也一樣是一次性、限時，對方用 `POST /api/guests/claim` 接回。
+
+| 錯誤 `code` | 狀態碼 | 何時 |
+| --- | --- | --- |
+| `not_admin` | `403` | 不是管理員 |
+| `guest_not_found` | `404` | 賓客不存在 |
 
 `GET /api/me`
 
