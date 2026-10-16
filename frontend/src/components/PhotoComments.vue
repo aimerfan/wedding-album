@@ -1,5 +1,32 @@
+<script lang="ts">
+import { ref } from 'vue'
+
+// 留言預設收起（新人的要求），點標題展開。放在元件外面並記在手機上，
+// 左右滑到下一張、下次再打開都維持上次的選擇
+const COLLAPSED_KEY = 'commentsCollapsed'
+
+function readCollapsed() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+const collapsed = ref(readCollapsed())
+
+function toggleCollapsed() {
+  collapsed.value = !collapsed.value
+  try {
+    localStorage.setItem(COLLAPSED_KEY, collapsed.value ? '1' : '0')
+  } catch {
+    // 存不了就只在這次有效
+  }
+}
+</script>
+
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { ApiError } from '@/api/client'
 import { createComment, deleteComment, fetchComments, updateComment } from '@/api/comments'
 import MarkPicker from '@/components/MarkPicker.vue'
@@ -125,100 +152,104 @@ async function remove(c: Comment) {
 <template>
   <section class="comments" aria-label="留言">
     <h3 class="title">
-      留言<span v-if="items.length" class="title-count"> · {{ items.length }}</span>
+      <button class="toggle" type="button" :aria-expanded="!collapsed" @click="toggleCollapsed">
+        留言<span v-if="items.length" class="title-count"> · {{ items.length }}</span>
+        <span class="toggle-hint">{{ collapsed ? '展開' : '收起' }}</span>
+        <svg class="chevron" :class="{ up: !collapsed }" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
     </h3>
 
-    <p v-if="loading" class="hint">載入中…</p>
-    <p v-else-if="loadError" class="hint error" role="alert">
-      {{ loadError }}
-      <button class="link" type="button" @click="load">重試</button>
-    </p>
-    <p v-else-if="items.length === 0" class="hint">還沒有人留言，來說第一句吧</p>
+    <template v-if="!collapsed">
+      <p v-if="loading" class="hint">載入中…</p>
+      <p v-else-if="loadError" class="hint error" role="alert">
+        {{ loadError }}
+        <button class="link" type="button" @click="load">重試</button>
+      </p>
+      <p v-else-if="items.length === 0" class="hint">還沒有人留言，來說第一句吧</p>
 
-    <ul v-if="items.length" class="list">
-      <li v-for="c in items" :key="c.id" class="item">
-        <span class="avatar">{{ c.guest.nickname[0] }}</span>
-        <div class="body">
-          <p class="meta">
-            <span class="name">{{ c.guest.nickname }}</span>
-            {{ relativeTime(c.createdAt) }}<span v-if="c.editedAt"> · 已編輯</span>
-          </p>
+      <ul v-if="items.length" class="list">
+        <li v-for="c in items" :key="c.id" class="item">
+          <span class="avatar">{{ c.guest.nickname[0] }}</span>
+          <div class="body">
+            <p class="meta">
+              <span class="name">{{ c.guest.nickname }}</span>
+              {{ relativeTime(c.createdAt) }}<span v-if="c.editedAt"> · 已編輯</span>
+            </p>
 
-          <form v-if="editingId === c.id" class="edit" @submit.prevent="saveEdit(c)">
-            <textarea
-              ref="editEl"
-              v-model="editDraft"
-              class="input"
-              :maxlength="config.maxCommentLength"
-              :disabled="busyId === c.id"
-              rows="2"
-              aria-label="修改留言"
-            />
-            <div class="foot">
-              <MarkPicker
+            <form v-if="editingId === c.id" class="edit" @submit.prevent="saveEdit(c)">
+              <textarea
+                ref="editEl"
                 v-model="editDraft"
-                class="marks"
-                :target="editEl[0]"
-                :max-length="config.maxCommentLength"
+                class="input"
+                :maxlength="config.maxCommentLength"
+                :disabled="busyId === c.id"
+                rows="2"
+                aria-label="修改留言"
               />
-              <button class="link" type="button" @click="editingId = ''">取消</button>
+              <div class="foot">
+                <MarkPicker
+                  v-model="editDraft"
+                  class="marks"
+                  :target="editEl[0]"
+                  :max-length="config.maxCommentLength"
+                />
+                <button class="link" type="button" @click="editingId = ''">取消</button>
+                <button class="send" type="submit" :disabled="!editDraft.trim() || busyId === c.id">
+                  儲存
+                </button>
+              </div>
+            </form>
+            <p v-else class="text">{{ c.text }}</p>
+
+            <div v-if="editingId !== c.id && (isMine(c) || session.isAdmin)" class="actions">
               <button
-                class="send"
-                type="submit"
-                :disabled="!editDraft.trim() || busyId === c.id"
+                v-if="isMine(c)"
+                class="link"
+                type="button"
+                :disabled="busyId === c.id"
+                @click="startEdit(c)"
               >
-                儲存
+                編輯
+              </button>
+              <button class="link" type="button" :disabled="busyId === c.id" @click="remove(c)">
+                {{ isMine(c) ? '刪除' : '刪除（管理員）' }}
               </button>
             </div>
-          </form>
-          <p v-else class="text">{{ c.text }}</p>
-
-          <div v-if="editingId !== c.id && (isMine(c) || session.isAdmin)" class="actions">
-            <button
-              v-if="isMine(c)"
-              class="link"
-              type="button"
-              :disabled="busyId === c.id"
-              @click="startEdit(c)"
-            >
-              編輯
-            </button>
-            <button class="link" type="button" :disabled="busyId === c.id" @click="remove(c)">
-              {{ isMine(c) ? '刪除' : '刪除（管理員）' }}
-            </button>
+            <p v-if="itemError?.id === c.id" class="hint error" role="alert">
+              {{ itemError.message }}
+            </p>
           </div>
-          <p v-if="itemError?.id === c.id" class="hint error" role="alert">
-            {{ itemError.message }}
-          </p>
-        </div>
-      </li>
-    </ul>
+        </li>
+      </ul>
 
-    <form class="composer" @submit.prevent="send">
-      <textarea
-        ref="draftEl"
-        v-model="draft"
-        class="input"
-        :maxlength="config.maxCommentLength"
-        :disabled="sending"
-        placeholder="留言給這張照片…"
-        rows="2"
-        aria-label="留言"
-      />
-      <p v-if="sendError" class="hint error" role="alert">{{ sendError }}</p>
-      <div class="foot">
-        <MarkPicker
+      <form class="composer" @submit.prevent="send">
+        <textarea
+          ref="draftEl"
           v-model="draft"
-          class="marks"
-          :target="draftEl"
-          :max-length="config.maxCommentLength"
+          class="input"
+          :maxlength="config.maxCommentLength"
+          :disabled="sending"
+          placeholder="留言給這張照片…"
+          rows="2"
+          aria-label="留言"
         />
-        <span class="counter">{{ draft.length }} / {{ config.maxCommentLength }}</span>
-        <button class="send" type="submit" :disabled="!canSend">
-          {{ sending ? '送出中…' : '送出' }}
-        </button>
-      </div>
-    </form>
+        <p v-if="sendError" class="hint error" role="alert">{{ sendError }}</p>
+        <div class="foot">
+          <MarkPicker
+            v-model="draft"
+            class="marks"
+            :target="draftEl"
+            :max-length="config.maxCommentLength"
+          />
+          <span class="counter">{{ draft.length }} / {{ config.maxCommentLength }}</span>
+          <button class="send" type="submit" :disabled="!canSend">
+            {{ sending ? '送出中…' : '送出' }}
+          </button>
+        </div>
+      </form>
+    </template>
   </section>
 </template>
 
@@ -239,6 +270,43 @@ async function remove(c: Comment) {
 
 .title-count {
   color: var(--c-ink-mute);
+}
+
+/* 整行都能點，手指好按 */
+.toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.toggle-hint {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--c-ink-mute);
+}
+
+.chevron {
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  fill: none;
+  stroke: var(--c-ink-mute);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s;
+}
+
+.chevron.up {
+  transform: rotate(180deg);
 }
 
 .hint {
