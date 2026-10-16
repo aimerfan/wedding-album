@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { createBlessing, updateBlessing } from '@/api/blessings'
 import { ApiError } from '@/api/client'
 import MarkPicker from '@/components/MarkPicker.vue'
+import ProfileSheet from '@/components/ProfileSheet.vue'
 import { useAlbumConfig } from '@/composables/useAlbumConfig'
 import { addBlessing, replaceBlessing } from '@/stores/blessingLists'
 import { session } from '@/stores/session'
@@ -20,10 +20,11 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ saved: [blessing: Blessing, isNew: boolean] }>()
 
-const router = useRouter()
 const config = useAlbumConfig()
 
 const nickname = computed(() => session.nickname || '賓客')
+/** 改暱稱：在這個面板上面再疊一層，不跳到歡迎頁（寫到一半的祝福才不會不見） */
+const profileOpen = ref(false)
 
 const draft = ref('')
 const draftEl = ref<HTMLTextAreaElement>()
@@ -84,7 +85,7 @@ async function send() {
         <div v-if="!editing" class="identity">
           <span class="avatar">{{ nickname[0] }}</span>
           <p class="identity-name">以「{{ nickname }}」留言</p>
-          <button class="identity-change" type="button" @click="router.push({ name: 'welcome' })">
+          <button class="identity-change" type="button" @click="profileOpen = true">
             更改
           </button>
         </div>
@@ -110,6 +111,7 @@ async function send() {
       </form>
     </div>
   </Transition>
+  <ProfileSheet v-model="profileOpen" />
 </template>
 
 <style scoped>

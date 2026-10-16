@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 import type { AlbumConfig } from '@/api/config'
-import type { MediaKind, UploadDraft } from '@/types/album'
+import type { MediaKind, PhotoTag, UploadDraft } from '@/types/album'
 
 /**
  * 跨頁共用的一點點狀態。目前只有「賓客資料」與「上傳流程」兩件事，
@@ -195,6 +195,55 @@ export function addPicked(files: File[]): PickedMedia[] {
     }))
   uploadFlow.picked = [...uploadFlow.picked, ...added]
   return added
+}
+
+/** 上傳頁拿掉的那一個，按「復原」時連同位置、寫好的文字與分類放回去 */
+export interface RemovedPick {
+  item: PickedMedia
+  pickedIndex: number
+  selectedIndex: number
+  tag?: PhotoTag
+  caption?: string
+}
+
+/**
+ * 上傳頁按「✕」拿掉一個選錯的：整個從待選區移除，不只是取消勾選，
+ * 不然傳完這批會被當成「還沒傳的」，又回到選取頁。
+ * 預覽網址先不回收，復原時還要用；確定不復原時交給 discardRemoved
+ */
+export function removePicked(id: string): RemovedPick | null {
+  const pickedIndex = uploadFlow.picked.findIndex((p) => p.id === id)
+  if (pickedIndex < 0) return null
+  const { tags, captions } = uploadFlow.draft
+  const removed: RemovedPick = {
+    item: uploadFlow.picked[pickedIndex]!,
+    pickedIndex,
+    selectedIndex: uploadFlow.selectedIds.indexOf(id),
+    tag: tags[id],
+    caption: captions[id],
+  }
+  uploadFlow.picked = uploadFlow.picked.filter((p) => p.id !== id)
+  uploadFlow.selectedIds = uploadFlow.selectedIds.filter((x) => x !== id)
+  delete tags[id]
+  delete captions[id]
+  return removed
+}
+
+export function restoreRemoved({ item, pickedIndex, selectedIndex, tag, caption }: RemovedPick) {
+  const picked = [...uploadFlow.picked]
+  picked.splice(pickedIndex, 0, item)
+  uploadFlow.picked = picked
+  if (selectedIndex >= 0) {
+    const selected = [...uploadFlow.selectedIds]
+    selected.splice(selectedIndex, 0, item.id)
+    uploadFlow.selectedIds = selected
+  }
+  if (tag) uploadFlow.draft.tags[item.id] = tag
+  if (caption !== undefined) uploadFlow.draft.captions[item.id] = caption
+}
+
+export function discardRemoved(removed: RemovedPick) {
+  URL.revokeObjectURL(removed.item.previewUrl)
 }
 
 /** 清空待選區時拿走的內容，按「復原」時放回去 */
