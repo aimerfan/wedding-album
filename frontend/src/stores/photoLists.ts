@@ -115,6 +115,7 @@ export function filterFromQuery(query: Record<string, unknown>): PhotoFilter {
   const uploader = pick('uploader')
   if (uploader) filter.uploader = uploader
   if (pick('favorited') === 'true') filter.favorited = 'true'
+  if (pick('private') === 'true') filter.private = 'true'
   const q = pick('q')?.trim()
   if (q) filter.q = q
   return filter
@@ -152,6 +153,10 @@ export function updatePhoto(photo: Photo) {
     .find((p) => p.id === photo.id)
   if (before && before.tag !== photo.tag) {
     for (const [key, { state }] of lists) if (key.includes('tag=')) state.stale = true
+  }
+  // 改成公開或只給新人看：首頁、分類、給我們的…幾乎每一串都會增減，全部下次重新載入
+  if (before && before.private !== photo.private) {
+    for (const { state } of lists.values()) state.stale = true
   }
   for (const [key, { state }] of lists) {
     const i = state.items.findIndex((p) => p.id === photo.id)

@@ -32,14 +32,22 @@ const initial = computed(() => nickname.value[0] ?? '賓')
 
 const stats = ref<MyStats>({ uploaded: 0, favorited: 0, likesReceived: 0, blessings: 0 })
 
-/** 設計稿的第 4 個 tab 原本標「收藏」，收藏收進這裡當分頁 */
-const tabs = [
-  { id: 'uploaded', label: '我上傳的', stat: 'uploaded' },
-  { id: 'favorites', label: '收藏', stat: 'favorited' },
-  { id: 'blessings', label: '我的祝福', stat: 'blessings' },
-] as const
+type TabId = 'uploaded' | 'favorites' | 'blessings' | 'private'
 
-type TabId = (typeof tabs)[number]['id']
+/**
+ * 設計稿的第 4 個 tab 原本標「收藏」，收藏收進這裡當分頁。
+ * 新人（管理員）多一個「給我們的」：賓客上傳時選「只給新人看」的照片都在這裡，相簿裡看不到
+ */
+const tabs = computed(() => {
+  const list: { id: TabId; label: string; stat?: keyof MyStats }[] = [
+    { id: 'uploaded', label: '我上傳的', stat: 'uploaded' },
+    { id: 'favorites', label: '收藏', stat: 'favorited' },
+    { id: 'blessings', label: '我的祝福', stat: 'blessings' },
+  ]
+  if (session.isAdmin) list.push({ id: 'private', label: '給我們的' })
+  return list
+})
+
 const activeTab = ref<TabId>('uploaded')
 
 /**
@@ -49,8 +57,16 @@ const activeTab = ref<TabId>('uploaded')
 const PHOTO_FILTERS: Partial<Record<TabId, PhotoFilter>> = {
   uploaded: { uploader: 'me' },
   favorites: { favorited: 'true' },
+  private: { private: 'true' },
 }
 const photoFilter = computed(() => PHOTO_FILTERS[activeTab.value])
+
+const EMPTY_TEXT: Record<TabId, string> = {
+  uploaded: '你還沒有上傳照片',
+  favorites: '還沒有收藏，在照片右下角點書籤就能收藏',
+  blessings: '',
+  private: '還沒有賓客私下傳照片給你們',
+}
 const photos = computed(() => (photoFilter.value ? getPhotoList(photoFilter.value) : null))
 
 /** 「我的祝福」：GET /api/blessings?guest=me */
@@ -298,7 +314,7 @@ const guideOpen = ref(false)
         :class="{ active: activeTab === t.id }"
         @click="activeTab = t.id"
       >
-        {{ t.label }} <span class="tab-n">{{ stats[t.stat] }}</span>
+        {{ t.label }} <span v-if="t.stat" class="tab-n">{{ stats[t.stat] }}</span>
       </button>
     </nav>
 
@@ -315,7 +331,7 @@ const guideOpen = ref(false)
       </div>
       <p v-if="photos.error" class="empty">{{ photos.error }}</p>
       <p v-else-if="photos.loaded && photos.items.length === 0" class="empty">
-        {{ activeTab === 'uploaded' ? '你還沒有上傳照片' : '還沒有收藏，在照片右下角點書籤就能收藏' }}
+        {{ EMPTY_TEXT[activeTab] }}
       </p>
     </template>
 

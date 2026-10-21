@@ -165,7 +165,7 @@ export const uploadFlow = reactive({
 })
 
 function emptyDraft(): UploadDraft {
-  return { tag: 'banquet', tags: {}, captions: {} }
+  return { tag: 'banquet', tags: {}, private: false, privates: {}, captions: {} }
 }
 
 function revokePicked() {
@@ -203,6 +203,7 @@ export interface RemovedPick {
   pickedIndex: number
   selectedIndex: number
   tag?: PhotoTag
+  private?: boolean
   caption?: string
 }
 
@@ -214,22 +215,25 @@ export interface RemovedPick {
 export function removePicked(id: string): RemovedPick | null {
   const pickedIndex = uploadFlow.picked.findIndex((p) => p.id === id)
   if (pickedIndex < 0) return null
-  const { tags, captions } = uploadFlow.draft
+  const { tags, privates, captions } = uploadFlow.draft
   const removed: RemovedPick = {
     item: uploadFlow.picked[pickedIndex]!,
     pickedIndex,
     selectedIndex: uploadFlow.selectedIds.indexOf(id),
     tag: tags[id],
+    private: privates[id],
     caption: captions[id],
   }
   uploadFlow.picked = uploadFlow.picked.filter((p) => p.id !== id)
   uploadFlow.selectedIds = uploadFlow.selectedIds.filter((x) => x !== id)
   delete tags[id]
+  delete privates[id]
   delete captions[id]
   return removed
 }
 
-export function restoreRemoved({ item, pickedIndex, selectedIndex, tag, caption }: RemovedPick) {
+export function restoreRemoved(removed: RemovedPick) {
+  const { item, pickedIndex, selectedIndex, tag, caption } = removed
   const picked = [...uploadFlow.picked]
   picked.splice(pickedIndex, 0, item)
   uploadFlow.picked = picked
@@ -239,6 +243,7 @@ export function restoreRemoved({ item, pickedIndex, selectedIndex, tag, caption 
     uploadFlow.selectedIds = selected
   }
   if (tag) uploadFlow.draft.tags[item.id] = tag
+  if (removed.private !== undefined) uploadFlow.draft.privates[item.id] = removed.private
   if (caption !== undefined) uploadFlow.draft.captions[item.id] = caption
 }
 
@@ -287,6 +292,8 @@ export function finishBatch(canUpload: (item: PickedMedia) => boolean, limit: nu
   uploadFlow.draft = {
     tag: uploadFlow.draft.tag,
     tags: only(uploadFlow.draft.tags),
+    private: uploadFlow.draft.private,
+    privates: only(uploadFlow.draft.privates),
     captions: only(uploadFlow.draft.captions),
   }
   return keep.length

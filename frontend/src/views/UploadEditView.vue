@@ -6,6 +6,7 @@ import { fetchConfig } from '@/api/config'
 import { uploadWithRetry } from '@/api/upload'
 import MarkPicker from '@/components/MarkPicker.vue'
 import AppToast, { type Toast } from '@/components/AppToast.vue'
+import LockIcon from '@/components/LockIcon.vue'
 import MediaLightbox from '@/components/MediaLightbox.vue'
 import MediaPreview from '@/components/MediaPreview.vue'
 import ProfileSheet from '@/components/ProfileSheet.vue'
@@ -56,6 +57,26 @@ function setTag(item: PickedMedia, tag: PhotoTag) {
   if (tag === uploadFlow.draft.tag) delete uploadFlow.draft.tags[item.id]
   else uploadFlow.draft.tags[item.id] = tag
 }
+
+// 公開或只給新人看：跟分類一樣，上面選預設，個別改過的就不再跟著預設
+
+function privateOf(item: PickedMedia): boolean {
+  return uploadFlow.draft.privates[item.id] ?? uploadFlow.draft.private
+}
+
+function togglePrivate(item: PickedMedia) {
+  const next = !privateOf(item)
+  if (next === uploadFlow.draft.private) delete uploadFlow.draft.privates[item.id]
+  else uploadFlow.draft.privates[item.id] = next
+}
+
+/** 「3 張照片 · 將公開分享」「2 張公開、1 張只給新人看」 */
+const visibilityLabel = computed(() => {
+  const privateCount = selected.value.filter(privateOf).length
+  if (privateCount === 0) return `${summary.value} · 將公開分享`
+  if (privateCount === count.value) return `${summary.value} · 只給新人看`
+  return `${count.value - privateCount} 個公開、${privateCount} 個只給新人看`
+})
 
 /**
  * 符號只出現在正在輸入的那一張下面：一次最多 30 張，每張都放一排太擠。
@@ -248,7 +269,11 @@ async function upload() {
         await uploadWithRetry(
           item.file,
           // 分類與說明在送出的那一刻才讀：排隊等著的那幾張，上傳中還來得及改
-          { tag: tagOf(item), caption: uploadFlow.draft.captions[item.id] ?? '' },
+          {
+            tag: tagOf(item),
+            caption: uploadFlow.draft.captions[item.id] ?? '',
+            private: privateOf(item),
+          },
           (percent) => {
             task.progress = percent
             if (percent > 0) task.retrying = false
@@ -354,10 +379,25 @@ onBeforeRouteLeave(() => {
           }}
         </p>
       </fieldset>
+
+      <fieldset class="settings" :disabled="running">
+        <legend class="settings-label">誰看得到？</legend>
+        <div class="tags">
+          <label class="tag" :class="{ active: !uploadFlow.draft.private }">
+            <input v-model="uploadFlow.draft.private" type="radio" name="visibility" :value="false" />
+            公開分享
+          </label>
+          <label class="tag" :class="{ active: uploadFlow.draft.private }">
+            <input v-model="uploadFlow.draft.private" type="radio" name="visibility" :value="true" />
+            只給新人看
+          </label>
+        </div>
+        <p class="settings-hint">只給新人看的，只有你和新人看得到，不會出現在相簿裡</p>
+      </fieldset>
     </section>
 
     <section class="items">
-      <p class="items-label">{{ summary }} · 將公開分享</p>
+      <p class="items-label">{{ visibilityLabel }}</p>
       <ul class="item-list">
         <li v-for="item in selected" :key="item.id" class="item">
           <button
@@ -384,18 +424,31 @@ onBeforeRouteLeave(() => {
             class="item-fields"
             :disabled="running || tasks[item.id]?.status === 'succeeded'"
           >
-            <span class="item-tag" :class="{ custom: item.id in uploadFlow.draft.tags }">
-              <select
-                :value="tagOf(item)"
-                aria-label="分類"
-                @change="setTag(item, ($event.target as HTMLSelectElement).value as PhotoTag)"
+            <div class="item-row">
+              <span class="item-tag" :class="{ custom: item.id in uploadFlow.draft.tags }">
+                <select
+                  :value="tagOf(item)"
+                  aria-label="分類"
+                  @change="setTag(item, ($event.target as HTMLSelectElement).value as PhotoTag)"
+                >
+                  <option v-for="t in PHOTO_TAGS" :key="t.id" :value="t.id">{{ t.label }}</option>
+                </select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+              <!-- 點一下就在公開、只給新人看之間切換 -->
+              <button
+                class="item-visibility"
+                :class="{ private: privateOf(item), custom: item.id in uploadFlow.draft.privates }"
+                type="button"
+                :aria-pressed="privateOf(item)"
+                @click="togglePrivate(item)"
               >
-                <option v-for="t in PHOTO_TAGS" :key="t.id" :value="t.id">{{ t.label }}</option>
-              </select>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </span>
+                <LockIcon v-if="privateOf(item)" />
+                {{ privateOf(item) ? '只給新人' : '公開' }}
+              </button>
+            </div>
             <textarea
               v-model="uploadFlow.draft.captions[item.id]"
               class="item-caption"
@@ -541,11 +594,51 @@ onBeforeRouteLeave(() => {
   gap: 6px;
 }
 
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* 原生下拉選單：手機上會叫出系統的選擇器，比自己畫的好按。外觀畫成小 chip */
 .item-tag {
   position: relative;
-  align-self: flex-start;
   color: var(--c-ink-soft);
+}
+
+/* 公開／只給新人：跟分類同樣大小的 chip，只給新人時填滿、加鎖頭 */
+.item-visibility {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--c-line-strong);
+  background: transparent;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
+}
+
+.item-visibility svg {
+  width: 11px;
+  height: 11px;
+}
+
+.item-visibility.private {
+  border-color: transparent;
+  background: var(--c-ink-soft);
+  color: var(--c-bg);
+}
+
+/* 跟預設不同的，跟分類一樣用玫瑰色標出來 */
+.item-visibility.custom {
+  border-color: var(--c-rose);
+}
+
+.item-visibility.private.custom {
+  background: var(--c-rose);
 }
 
 .item-tag select {

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { deletePhoto, editPhoto, fetchPhoto, setFavorited, setLiked } from '@/api/photos'
+import LockIcon from '@/components/LockIcon.vue'
 import MarkPicker from '@/components/MarkPicker.vue'
 import PhotoComments from '@/components/PhotoComments.vue'
 import PhotoSwiper from '@/components/PhotoSwiper.vue'
@@ -257,16 +258,19 @@ const editing = ref(false)
 const draftCaption = ref('')
 const captionEl = ref<HTMLTextAreaElement>()
 const draftTag = ref<PhotoTag>('banquet')
+/** 只有上傳者能改要不要公開：管理員不能把別人私下給的照片公開出去（後端也這樣把關） */
+const draftPrivate = ref(false)
 const saving = ref(false)
 const editError = ref('')
 
-const editLabel = computed(() => (isMine.value ? '編輯文字與分類' : '改分類（管理員）'))
+const editLabel = computed(() => (isMine.value ? '編輯文字、分類與公開' : '改分類（管理員）'))
 
 function startEdit() {
   const p = photo.value
   if (!p) return
   draftCaption.value = p.caption ?? ''
   draftTag.value = p.tag
+  draftPrivate.value = p.private
   editError.value = ''
   moreOpen.value = false
   editing.value = true
@@ -297,6 +301,7 @@ async function saveEdit() {
   if (draftTag.value !== target.tag) changes.tag = draftTag.value
   const caption = draftCaption.value.trim()
   if (isMine.value && caption !== (target.caption ?? '')) changes.caption = caption || null
+  if (isMine.value && draftPrivate.value !== target.private) changes.private = draftPrivate.value
   // 什麼都沒改就直接收起來，不必送
   if (Object.keys(changes).length === 0) {
     editing.value = false
@@ -413,7 +418,12 @@ function toggleFavorite() {
           <span class="avatar">{{ photo.uploader.nickname[0] }}</span>
           <div class="who-text">
             <p class="name">{{ photo.uploader.nickname }}</p>
-            <p class="meta">{{ takenLabel }}</p>
+            <p class="meta">
+              {{ takenLabel }}
+              <span v-if="photo.private" class="meta-private">
+                · <LockIcon /> 只給新人看
+              </span>
+            </p>
           </div>
           <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M9 6l6 6-6 6" />
@@ -470,6 +480,19 @@ function toggleFavorite() {
             >
               <input v-model="draftTag" type="radio" name="detail-tag" :value="t.id" />
               {{ t.label }}
+            </label>
+          </div>
+        </fieldset>
+        <fieldset v-if="isMine" class="editor-tags" :disabled="saving">
+          <legend>誰看得到</legend>
+          <div class="editor-tag-grid">
+            <label class="editor-tag" :class="{ active: !draftPrivate }">
+              <input v-model="draftPrivate" type="radio" name="detail-visibility" :value="false" />
+              公開分享
+            </label>
+            <label class="editor-tag" :class="{ active: draftPrivate }">
+              <input v-model="draftPrivate" type="radio" name="detail-visibility" :value="true" />
+              只給新人看
             </label>
           </div>
         </fieldset>
@@ -621,6 +644,8 @@ function toggleFavorite() {
   text-align: left;
   font-size: 14px;
   color: var(--c-rose);
+  /* 選單往左撐開，不要把「編輯文字、分類與公開」擠成兩行 */
+  white-space: nowrap;
 }
 
 .round svg {
@@ -811,6 +836,12 @@ function toggleFavorite() {
   font-size: 11px;
   letter-spacing: 1px;
   color: var(--c-ink-mute);
+}
+
+.meta-private svg {
+  width: 9px;
+  height: 9px;
+  vertical-align: -1px;
 }
 
 .editor-tag-grid {

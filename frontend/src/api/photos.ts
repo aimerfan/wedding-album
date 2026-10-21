@@ -11,6 +11,8 @@ export interface PhotoFilter {
   uploader?: string
   /** 只列我收藏的（「我的 → 收藏」） */
   favorited?: 'true'
+  /** 只給新人看的照片（新人「我的 → 給我們的」）。只有管理員能用 */
+  private?: 'true'
   /** 首頁的搜尋：上傳者的暱稱或「與新人的關係」含有這段文字 */
   q?: string
 }
@@ -42,7 +44,10 @@ export function setFavorited(id: string, favorited: boolean) {
 }
 
 /** 改分類或說明，沒帶的欄位不變。caption 傳 null 是刪掉說明。回傳更新後的照片 */
-export function editPhoto(id: string, changes: { tag?: PhotoTag; caption?: string | null }) {
+export function editPhoto(
+  id: string,
+  changes: { tag?: PhotoTag; caption?: string | null; private?: boolean },
+) {
   return api<Photo>('/photos/' + encodeURIComponent(id), { method: 'PATCH', body: changes })
 }
 

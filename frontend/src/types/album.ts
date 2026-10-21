@@ -48,6 +48,8 @@ export interface Photo {
   likedByMe: boolean
   favoritedByMe: boolean
   tag: PhotoTag
+  /** 只給新人看：只有上傳者與管理員（新人與家人）看得到，不出現在相簿裡 */
+  private: boolean
   /** 上傳者對這張照片的說明，選填 */
   caption: string | null
   /** 說明最後一次修改的時間，沒改過是 null。用來標示「已編輯」 */
@@ -97,7 +99,7 @@ export interface WeddingPhoto {
 
 /** PhotoTile 顯示一張圖需要的欄位，賓客照片與婚紗照都符合。影片會多一個角標 */
 export type TileImage = Pick<Photo, 'displayUrl' | 'thumbnailUrl'> &
-  Partial<Pick<Photo, 'kind' | 'durationSeconds' | 'caption'>>
+  Partial<Pick<Photo, 'kind' | 'durationSeconds' | 'caption' | 'private'>>
 
 /** 首頁頂部的統計數字 */
 export interface AlbumStats {
@@ -127,6 +129,10 @@ export interface UploadDraft {
   tag: PhotoTag
   /** 個別改過分類的；沒有的就跟著預設 */
   tags: Record<string, PhotoTag>
+  /** 這批照片預設是不是只給新人看。預設公開 */
+  private: boolean
+  /** 個別改過公開與否的；沒有的就跟著預設 */
+  privates: Record<string, boolean>
   /** 每張的說明，選填 */
   captions: Record<string, string>
 }

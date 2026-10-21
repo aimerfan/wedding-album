@@ -13,6 +13,8 @@ export interface UploadMeta {
   tag: PhotoTag
   /** 選填，空字串就是沒有說明 */
   caption: string
+  /** 只給新人看 */
+  private: boolean
 }
 
 export function uploadPhoto(
@@ -26,6 +28,7 @@ export function uploadPhoto(
     form.append('file', file)
     form.append('tag', meta.tag)
     if (meta.caption.trim()) form.append('caption', meta.caption.trim())
+    if (meta.private) form.append('private', 'true')
 
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/photos')

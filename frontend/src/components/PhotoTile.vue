@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import LockIcon from '@/components/LockIcon.vue'
 import type { TileImage } from '@/types/album'
 
 /**
@@ -59,6 +60,10 @@ const videoBadge = computed(() => {
       <svg viewBox="0 0 12 12" fill="#fff" aria-hidden="true"><path d="M3 2v8l7-4z" /></svg>
       {{ videoBadge }}
     </span>
+    <!-- 只給新人看的照片在列表上標一個鎖頭（「我上傳的」「給我們的」才會出現）；放大檢視時不標 -->
+    <span v-if="photo?.private && !full" class="lock-badge" aria-label="只給新人看">
+      <LockIcon />
+    </span>
     <slot />
   </div>
 </template>
@@ -100,6 +105,25 @@ const videoBadge = computed(() => {
   background: rgba(0, 0, 0, 0.5);
   font-size: 9px;
   color: #fff;
+}
+
+.lock-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.lock-badge svg {
+  width: 12px;
+  height: 12px;
 }
 
 .video-badge svg {
