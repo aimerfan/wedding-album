@@ -29,6 +29,9 @@ GUESTS = [
     ("俊豪", None),
 ]
 
+# 只給新人看的照片：第幾張
+PRIVATE = {9}
+
 # (上傳者在 GUESTS 的位置, 寬, 高, 分類)。順序就是上傳的先後
 PHOTOS = [
     (0, 3, 4, "engagement"),
@@ -141,6 +144,7 @@ def seed_command(reset: bool):
             uploader=guests[guest_index],
             tag=tag,
             caption=CAPTIONS.get(i),
+            private=i in PRIVATE,
             width=width,
             height=height,
             uploaded_at=started + timedelta(minutes=10 * i),

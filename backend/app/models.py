@@ -3,7 +3,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta, timezone
 
-from sqlalchemy import ForeignKey, Index, String, func
+from sqlalchemy import ColumnElement, ForeignKey, Index, String, func, or_
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app import storage
@@ -112,6 +112,9 @@ class Photo(db.Model):
     content_hash: Mapped[str | None] = mapped_column(String(64))
     # 從 EXIF 讀出的拍攝時間，讀不到就是 None
     taken_at: Mapped[datetime | None]
+    # 只給新人看：只有上傳者與管理員（新人與家人）看得到，不出現在相簿裡。
+    # 這個欄位加上之前的舊照片是 NULL，跟 False 一樣算公開
+    private: Mapped[bool | None] = mapped_column(default=False)
     # 上傳者對這張照片的說明（選填）。只有上傳者能寫，顯示在照片下方
     caption: Mapped[str | None] = mapped_column(String(1000))
     # 說明最後一次修改的時間，上傳時寫的、還沒改過就是 None。前端用來標示「已編輯」
@@ -123,6 +126,15 @@ class Photo(db.Model):
     thumb_key: Mapped[str] = mapped_column(String(128))
 
     uploader: Mapped[Guest] = relationship(lazy="joined")
+
+    def visible_to(self, guest: "Guest") -> bool:
+        """公開的大家都看得到；只給新人看的，只有上傳者與管理員看得到。"""
+        return not self.private or self.uploader_id == guest.id or guest.is_admin
+
+    @staticmethod
+    def is_public() -> ColumnElement[bool]:
+        """查詢用：公開的照片。舊照片的 private 是 NULL，也算公開"""
+        return or_(Photo.private.is_(None), Photo.private.is_(False))
 
     def to_json(self, viewer_id: str | None = None) -> dict:
         """單張照片。列表請用 photos_to_json()，一次查好讚數，不必每張各查一次。"""
@@ -142,6 +154,7 @@ class Photo(db.Model):
             "uploadedAt": iso(self.uploaded_at),
             "takenAt": iso(self.taken_at),
             "tag": self.tag,
+            "private": bool(self.private),
             "caption": self.caption,
             "captionEditedAt": iso(self.caption_edited_at),
         }

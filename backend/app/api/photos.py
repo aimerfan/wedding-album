@@ -64,7 +64,8 @@ def list_photos():
         start, end = _today_range_utc()
         query = query.where(Photo.uploaded_at >= start, Photo.uploaded_at < end)
 
-    if uploader := args.get("uploader"):
+    uploader = args.get("uploader")
+    if uploader:
         query = query.where(Photo.uploader_id == (g.guest.id if uploader == "me" else uploader))
 
     # 相簿頁的搜尋：上傳者的暱稱或「與新人的關係」含有這段文字（英文不分大小寫）。
@@ -75,14 +76,40 @@ def list_photos():
             | Guest.relation.contains(q, autoescape=True)
         )
 
-    if args.get("favorited") == "true":
+    favorited = args.get("favorited") == "true"
+    if favorited:
         # 收藏是私人的，只能看自己的
         query = query.join(
             Favorite, (Favorite.photo_id == Photo.id) & (Favorite.guest_id == g.guest.id)
         )
 
+    query = _only_visible(
+        query, private=args.get("private") == "true", mine=uploader == "me", favorited=favorited
+    )
+
     items, next_cursor = paginate(query, Photo.uploaded_at, Photo.id)
     return jsonify({"items": photos_to_json(items, g.guest.id), "nextCursor": next_cursor})
+
+
+def _only_visible(query, *, private: bool, mine: bool, favorited: bool):
+    """只給新人看的照片，哪些列表看得到：
+
+    - private=true：「給我們的」，所有只給新人看的照片。只有管理員（新人與家人）能看
+    - 我上傳的：自己的全部都列，公開的、只給新人看的都有
+    - 收藏：看得到的才列（自己的、管理員看得到全部）
+    - 其他（首頁、分類、搜尋、別人的照片）：只列公開的，管理員看到的也跟大家一樣
+    """
+    if private:
+        if not g.guest.is_admin:
+            raise ApiError(403, "not_admin", "只有新人與管理員可以看")
+        return query.where(Photo.private.is_(True))
+    if mine:
+        return query
+    if favorited:
+        if g.guest.is_admin:
+            return query
+        return query.where(Photo.is_public() | (Photo.uploader_id == g.guest.id))
+    return query.where(Photo.is_public())
 
 
 def _file_size(stream) -> int:
@@ -104,7 +131,7 @@ def _too_large(limit: int, what: str) -> ApiError:
 @require_guest
 def upload_photo():
     """上傳一張照片或一支影片。multipart/form-data，欄位 file（必填）、tag（選填，預設 banquet）、
-    caption（選填，照片說明）。
+    caption（選填，照片說明）、private（選填，true 就是只給新人看）。
 
     是照片還是影片看檔案內容判斷，副檔名、Content-Type 都不採信。
     同一位賓客傳了一模一樣的檔案，回傳已經有的那張（200），不會變成兩張。
@@ -119,6 +146,7 @@ def upload_photo():
 
     tag = _clean_tag(request.form.get("tag") or "banquet")
     caption = _clean_caption(request.form.get("caption"))
+    private = _form_bool(request.form.get("private"))
 
     # 檔案已經在 Werkzeug 的暫存檔裡，先看大小，超過就不必讀進記憶體
     stream = file.stream
@@ -163,8 +191,17 @@ def upload_photo():
 
         kind = "photo"
 
-    photo, created = _store(kind, tag, caption, processed, content_hash, save_original)
+    photo, created = _store(kind, tag, caption, private, processed, content_hash, save_original)
     return jsonify(photo.to_json(g.guest.id)), 201 if created else 200
+
+
+def _form_bool(raw: str | None) -> bool:
+    """表單欄位只會是文字。沒帶就是 False"""
+    if raw in (None, "", "false"):
+        return False
+    if raw == "true":
+        return True
+    raise ApiError(400, "invalid_private", "private 只能是 true 或 false")
 
 
 def _clean_tag(raw: object) -> str:
@@ -226,7 +263,13 @@ def _process_video(stream) -> videos.ProcessedVideo:
 
 
 def _store(
-    kind: str, tag: str, caption: str | None, processed, content_hash: str, save_original
+    kind: str,
+    tag: str,
+    caption: str | None,
+    private: bool,
+    processed,
+    content_hash: str,
+    save_original,
 ) -> tuple[Photo, bool]:
     """存檔案、寫資料庫，回傳 (照片, 是不是新建的)。
 
@@ -241,6 +284,7 @@ def _store(
         kind=kind,
         tag=tag,
         caption=caption,
+        private=private,
         width=processed.width,
         height=processed.height,
         taken_at=processed.taken_at,
@@ -289,17 +333,22 @@ def _minutes(seconds: int) -> str:
     return f"{m} 分鐘" if not s else f"{m} 分 {s} 秒"
 
 
-def _get_photo_or_404(photo_id: str) -> Photo:
+def get_visible_photo(photo_id: str) -> Photo:
+    """拿一張照片，看不到的（別人只給新人看的）跟不存在一樣回 404，不讓人知道有這張。
+
+    單張、修改、刪除、按讚、收藏、留言都經過這裡。
+    """
     photo = db.session.get(Photo, photo_id)
-    if photo is None:
+    if photo is None or not photo.visible_to(g.guest):
         raise ApiError(404, "photo_not_found", "找不到這張照片")
     return photo
+
 
 
 @bp.get("/photos/<photo_id>")
 @require_guest
 def get_photo(photo_id: str):
-    return jsonify(_get_photo_or_404(photo_id).to_json(g.guest.id))
+    return jsonify(get_visible_photo(photo_id).to_json(g.guest.id))
 
 
 @bp.patch("/photos/<photo_id>")
@@ -309,8 +358,9 @@ def update_photo(photo_id: str):
 
     分類：上傳者與管理員都能改（管理員幫忙整理分錯的照片）。
     說明：只有上傳者能寫；管理員只能刪掉（傳 null），不能改成別的內容，免得變成別人替上傳者說話。
+    公開或只給新人看：只有上傳者能改，管理員不能把別人私下給的照片公開出去。
     """
-    photo = _get_photo_or_404(photo_id)
+    photo = get_visible_photo(photo_id)
     is_mine = photo.uploader_id == g.guest.id
     if not is_mine and not g.guest.is_admin:
         raise ApiError(403, "not_your_photo", "只能修改自己上傳的照片")
@@ -318,6 +368,13 @@ def update_photo(photo_id: str):
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         raise ApiError(400, "invalid_body", "請求內容必須是 JSON 物件")
+
+    if "private" in body:
+        if not isinstance(body["private"], bool):
+            raise ApiError(400, "invalid_private", "private 只能是 true 或 false")
+        if not is_mine:
+            raise ApiError(403, "not_your_photo", "只有上傳者可以改要不要公開")
+        photo.private = body["private"]
 
     if "tag" in body:
         photo.tag = _clean_tag(body["tag"])
@@ -342,7 +399,7 @@ def delete_photo(photo_id: str):
 
     讚、收藏、說明、留言一併刪掉。
     """
-    photo = _get_photo_or_404(photo_id)
+    photo = get_visible_photo(photo_id)
     if photo.uploader_id != g.guest.id and not g.guest.is_admin:
         raise ApiError(403, "not_your_photo", "只能刪除自己上傳的照片")
 
@@ -364,7 +421,7 @@ def delete_photo(photo_id: str):
 
 
 def _set_mark(model, photo_id: str, on: bool):
-    photo = _get_photo_or_404(photo_id)
+    photo = get_visible_photo(photo_id)
     existing = db.session.get(model, (g.guest.id, photo.id))
     if on and existing is None:
         db.session.add(model(guest_id=g.guest.id, photo_id=photo.id))
@@ -406,7 +463,8 @@ def get_stats():
 
     return jsonify(
         {
-            "photoCount": count(db.select(func.count()).select_from(Photo)),
+            # 只算公開的：只給新人看的不在相簿裡
+            "photoCount": count(db.select(func.count()).select_from(Photo).where(Photo.is_public())),
             # 透過 app 加入相簿的賓客人數，不含預先匯入的祝福作者
             "guestCount": count(
                 db.select(func.count()).select_from(Guest).where(Guest.imported.is_(False))

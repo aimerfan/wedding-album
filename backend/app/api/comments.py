@@ -3,10 +3,11 @@
 from flask import current_app, g, jsonify, request
 
 from app.api import bp
+from app.api.photos import get_visible_photo
 from app.auth import require_guest
 from app.db import db
 from app.errors import ApiError
-from app.models import Comment, Photo, now
+from app.models import Comment, now
 
 
 def _clean_text(raw: object) -> str:
@@ -27,13 +28,6 @@ def _body_text() -> str:
     return _clean_text(body.get("text"))
 
 
-def _photo_or_404(photo_id: str) -> Photo:
-    photo = db.session.get(Photo, photo_id)
-    if photo is None:
-        raise ApiError(404, "photo_not_found", "找不到這張照片")
-    return photo
-
-
 def _my_comment(comment_id: str, allow_admin: bool = False) -> Comment:
     """只能改、刪自己的留言；allow_admin 時管理員也可以（刪除用，管理員不能改別人的內容）。"""
     comment = db.session.get(Comment, comment_id)
@@ -51,7 +45,7 @@ def list_comments(photo_id: str):
 
     一張照片的留言不會多到需要分頁，一次全部回傳。
     """
-    photo = _photo_or_404(photo_id)
+    photo = get_visible_photo(photo_id)
     comments = db.session.scalars(
         db.select(Comment)
         .where(Comment.photo_id == photo.id)
@@ -64,7 +58,7 @@ def list_comments(photo_id: str):
 @require_guest
 def create_comment(photo_id: str):
     """截止上傳後也可以留言：截止只是不再收新的檔案。"""
-    photo = _photo_or_404(photo_id)
+    photo = get_visible_photo(photo_id)
     comment = Comment(photo_id=photo.id, guest_id=g.guest.id, text=_body_text())
     db.session.add(comment)
     db.session.commit()
