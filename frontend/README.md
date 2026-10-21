@@ -53,6 +53,13 @@ npm run dev
   - 連結一定要一開始就給對：iPhone Safari 讀到連結就抓 manifest，事後改 `href` 不會重抓（正式環境的 nginx 記錄證實過）。
   - 活動碼也會從 `/welcome?redirect=/?code=…` 的 `redirect` 裡找，規則跟 `stores/session.ts` 一致。
   **manifest 的內容 `vite.config.ts` 與 `backend/app/api/manifest.py` 各有一份，改一邊要改另一邊。**
+- manifest 不鎖畫面方向。改由 `router/index.ts` 每次換頁時處理：照片詳情解鎖、其他頁鎖直式。
+  只有 Android 安裝到主畫面的 app 鎖得住；iPhone 沒有鎖方向的 API，其他頁也會跟著轉，這是接受的取捨。
+  照片詳情橫放（`(orientation: landscape) and (max-height: 500px)`，只有手機）時照片佔滿全螢幕，
+  上方按鈕與半透明資訊條（上傳者、讚、收藏、說明兩行）浮在照片上，點照片中間一起收起／叫回。
+  留言、編輯說明與分類只在直式顯示，橫放時資訊條放不下。
+  照片詳情不分直橫都可以點畫面左右三分之一換上／下一張（像 IG）；點在影片上不換張，交給播放控制。
+  影片不切換（點影片是叫出播放控制），也不顯示資訊條，以免蓋住控制列；上方按鈕改成播放中收起、暫停或播完再出現。
 
 ## 已知的坑
 

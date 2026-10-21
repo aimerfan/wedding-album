@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { fetchWeddingPhotos } from '@/api/wedding'
@@ -77,6 +77,41 @@ function close() {
   if (openedHere) router.back()
   else router.replace({ query: {} })
   openedHere = false
+}
+
+// --- 放大檢視：手機橫放全螢幕、點左右換張（跟照片詳情一樣） ---------------
+// 版面由 CSS 的 media query 切換，條件要跟 <style> 裡的一致
+
+const LANDSCAPE = '(orientation: landscape) and (max-height: 500px)'
+const landscapeQuery = window.matchMedia(LANDSCAPE)
+/** 橫放時點中間把上方按鈕收起來，只剩照片 */
+const immersive = ref(false)
+
+// 轉向、重新打開檢視時一律先顯示按鈕
+function showBar() {
+  immersive.value = false
+}
+onMounted(() => landscapeQuery.addEventListener('change', showBar))
+onBeforeUnmount(() => landscapeQuery.removeEventListener('change', showBar))
+watch(viewing, (v, before) => {
+  if (v === null || before === null) showBar()
+})
+
+/**
+ * 畫面左右三等分：點左邊上一張、點右邊下一張；
+ * 點中間在橫放時收起／叫出上方按鈕，直式時不做事。
+ */
+function onStageClick(e: MouseEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const x = (e.clientX - rect.left) / rect.width
+  const i = current.value
+  if (x < 1 / 3) {
+    if (i > 0) current.value = i - 1
+  } else if (x > 2 / 3) {
+    if (i < photos.value.length - 1) current.value = i + 1
+  } else if (landscapeQuery.matches) {
+    immersive.value = !immersive.value
+  }
 }
 </script>
 
@@ -159,6 +194,7 @@ function close() {
       <div
         v-if="viewing !== null"
         class="viewer"
+        :class="{ immersive }"
         role="dialog"
         aria-label="婚紗照"
         @contextmenu.prevent
@@ -173,7 +209,7 @@ function close() {
           <span class="round-spacer" />
         </header>
 
-        <div class="viewer-stage">
+        <div class="viewer-stage" @click="onStageClick">
           <PhotoSwiper v-model="current" :slides="slides" />
         </div>
       </div>
@@ -387,6 +423,37 @@ function close() {
   flex: 1;
   min-height: 0;
   padding: 16px 0 calc(var(--safe-bottom) + 32px);
+}
+
+/*
+ * 手機橫放：照片佔滿整個螢幕，上方按鈕浮在照片上，點中間收起（.immersive）。
+ * 限定高度 500px 以下，只有橫拿的手機會套用；條件要跟 <script> 裡的 LANDSCAPE 一致。
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  .viewer {
+    background: var(--c-dark-stage);
+  }
+
+  /* 瀏海在左右兩側，按鈕要避開 */
+  .viewer-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: calc(var(--safe-top) + 12px) calc(var(--safe-right) + 16px) 0
+      calc(var(--safe-left) + 16px);
+    transition: opacity 0.2s;
+  }
+
+  .immersive .viewer-bar {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .viewer-stage {
+    padding: 0;
+  }
 }
 
 .fade-enter-active,

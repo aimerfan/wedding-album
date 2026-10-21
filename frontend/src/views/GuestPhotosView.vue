@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import ContinueSheet from '@/components/ContinueSheet.vue'
 import PhotoTile from '@/components/PhotoTile.vue'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { ensureLoaded, getPhotoList, loadMore } from '@/stores/photoLists'
+import { session } from '@/stores/session'
 
 /** 某位賓客拍的所有照片。從照片詳情點上傳者進來。對應 GET /api/photos?uploader=<guestId> */
 const props = defineProps<{ guestId: string }>()
@@ -23,6 +25,15 @@ useInfiniteScroll(sentinel, async () => {
   await loadMore(filter.value)
   return !list.value.done && !list.value.error
 })
+
+/**
+ * 管理員替這位賓客產生接續碼：他原本的裝置不見了（換手機、清掉瀏覽器資料）時，靠這個找回身分。
+ * 權限由後端把關，這裡只決定要不要顯示按鈕；自己的身分用「我的」頁產生就好
+ */
+const canRecover = computed(
+  () => session.isAdmin && !!guest.value && guest.value.id !== session.guestId,
+)
+const recoverOpen = ref(false)
 
 function back() {
   if (window.history.state?.back) router.back()
@@ -53,7 +64,15 @@ function back() {
         <h1 class="name">{{ guest.nickname }}</h1>
         <p v-if="guest.relation" class="relation">{{ guest.relation }}</p>
         <p class="count">拍了 {{ photos.length }}{{ list.done ? '' : '+' }} 張照片</p>
+        <button v-if="canRecover" class="recover" type="button" @click="recoverOpen = true">
+          幫他產生接續碼（管理員）
+        </button>
       </section>
+      <ContinueSheet
+        v-if="canRecover && guest"
+        v-model="recoverOpen"
+        :for-guest="{ id: guest.id, nickname: guest.nickname }"
+      />
 
       <div class="grid">
         <RouterLink
@@ -140,6 +159,17 @@ function back() {
 .count {
   margin: 8px 0 0;
   font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--c-ink-soft);
+}
+
+.recover {
+  margin-top: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--c-line-strong);
+  border-radius: 14px;
+  background: transparent;
+  font-size: 12px;
   letter-spacing: 1px;
   color: var(--c-ink-soft);
 }

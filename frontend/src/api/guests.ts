@@ -49,6 +49,14 @@ export function createTransferCode() {
   return api<{ code: string; expiresAt: string }>('/me/transfer-codes', { method: 'POST' })
 }
 
+/** 管理員替別人產生接續碼：對方原本的裝置不見了，自己產生不了時用 */
+export function createTransferCodeFor(guestId: string) {
+  return api<{ code: string; expiresAt: string }>(
+    `/guests/${encodeURIComponent(guestId)}/transfer-codes`,
+    { method: 'POST' },
+  )
+}
+
 /** 在這個裝置用接續碼換一組新的 token。原本的裝置不會被登出 */
 export function claimTransferCode(code: string) {
   return api<JoinResult>('/guests/claim', { method: 'POST', body: { transferCode: code } })

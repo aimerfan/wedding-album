@@ -84,7 +84,8 @@ async function enter() {
   error.value = ''
   try {
     // 已經加入過（從上傳頁按「更改」回來）就只改資料，不要變成另一位新賓客
-    const { guest } = session.token
+    const isNew = !session.token
+    const { guest } = !isNew
       ? await updateMe(nickname, relation.value.trim())
       : await joinAlbum(session.eventCode, nickname, relation.value.trim()).then((r) => {
           setToken(r.token)
@@ -94,9 +95,13 @@ async function enter() {
     setProfile(guest.nickname, guest.relation ?? '')
     setGuestId(guest.id)
 
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     // 只接受站內路徑，避免被帶去別的網站
-    router.replace(redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : { name: 'feed' })
+    const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : ''
+    // 新加入的賓客先到「我的」（新人的要求）。掃 QR code 進來的 redirect 是首頁（/?code=…），也算沒有指定；
+    // 分享出去的照片連結這類有明確目的地的，照舊帶過去
+    const toDefault = !redirect || router.resolve(redirect).name === 'feed'
+    router.replace(toDefault ? { name: isNew ? 'me' : 'feed' } : redirect)
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : '發生錯誤，請稍後再試'
   } finally {

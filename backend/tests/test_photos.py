@@ -178,6 +178,45 @@ def test_filter_by_kind(client, me, add_photo):
     assert _ids(_list(client, token, kind="photo")) == [photo]
 
 
+def test_search_by_nickname_or_relation(client, join, add_photo):
+    token, hui = join("小慧", relation="新娘的大學同學")
+    _, kai = join("阿凱", relation="新郎同事")
+    _, amy = join("Amy")
+    hui_photo = add_photo(hui["id"])
+    kai_photo = add_photo(kai["id"])
+    amy_photo = add_photo(amy["id"])
+
+    # 暱稱、關係都比對子字串；英文不分大小寫
+    assert _ids(_list(client, token, q="慧")) == [hui_photo]
+    assert _ids(_list(client, token, q="大學")) == [hui_photo]
+    assert set(_ids(_list(client, token, q="新"))) == {hui_photo, kai_photo}
+    assert _ids(_list(client, token, q="amy")) == [amy_photo]
+    assert _ids(_list(client, token, q="沒有這個人")) == []
+    # 前後空白不算；空字串等於沒搜尋
+    assert _ids(_list(client, token, q="  阿凱 ")) == [kai_photo]
+    assert len(_ids(_list(client, token, q="  "))) == 3
+
+
+def test_search_treats_wildcards_literally(client, join, add_photo):
+    token, pct = join("100%")
+    _, other = join("阿凱")
+    pct_photo = add_photo(pct["id"])
+    add_photo(other["id"])
+
+    assert _ids(_list(client, token, q="%")) == [pct_photo]
+    assert _ids(_list(client, token, q="_")) == []
+
+
+def test_search_combines_with_other_filters(client, join, add_photo):
+    token, hui = join("小慧")
+    _, kai = join("阿凱")
+    hui_video = add_photo(hui["id"], kind="video")
+    add_photo(hui["id"])
+    add_photo(kai["id"], kind="video")
+
+    assert _ids(_list(client, token, q="小慧", kind="video")) == [hui_video]
+
+
 # --- 單張 -----------------------------------------------------------------
 
 

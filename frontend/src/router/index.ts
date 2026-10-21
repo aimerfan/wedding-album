@@ -77,4 +77,26 @@ router.beforeEach((to) => {
   return true
 })
 
+/**
+ * 畫面方向：只有照片詳情與婚紗集的放大檢視（/wedding?photo=…）可以跟著手機轉，其他頁固定直式。
+ * manifest 不鎖方向（鎖了詳情頁就轉不過來），改成每次換頁時用 screen.orientation 鎖／解鎖。
+ * 只有 Android 安裝到主畫面的 app 鎖得住；iPhone、桌機、一般瀏覽器分頁的 lock() 會被拒絕，
+ * 這時就不鎖，照瀏覽器原本的行為（iPhone 其他頁也能轉，這是接受的取捨）。
+ */
+type LockableOrientation = ScreenOrientation & {
+  lock?: (orientation: 'portrait') => Promise<void>
+}
+
+router.afterEach((to) => {
+  try {
+    const o = window.screen?.orientation as LockableOrientation | undefined
+    if (!o) return
+    const viewing = to.name === 'photo-detail' || (to.name === 'wedding' && !!to.query.photo)
+    if (viewing) o.unlock?.()
+    else o.lock?.('portrait')?.catch(() => {})
+  } catch {
+    // 不支援的瀏覽器可能直接丟例外，方向鎖不到不影響使用
+  }
+})
+
 export default router

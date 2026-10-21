@@ -109,3 +109,58 @@ def test_expiry_minutes_follow_config(app, client, join):
         transfer = db.session.get(TransferCode, code)
         remaining = transfer.expires_at - now()
     assert timedelta(minutes=4) < remaining <= timedelta(minutes=5)
+
+
+# --- 管理員替別人產生 -----------------------------------------------------
+
+
+def _admin(client, join, nickname="婷婷"):
+    token, _ = join(nickname)
+    res = client.post("/api/me/admin", headers=auth(token), json={"adminCode": "admin"})
+    assert res.status_code == 200
+    return token
+
+
+def test_admin_issues_code_for_lost_guest(client, join):
+    # 小慧的手機不見了，管理員替她產生接續碼，她在新手機上接回原本的身分
+    _, hui = join("小慧")
+    admin = _admin(client, join)
+
+    res = client.post(f"/api/guests/{hui['id']}/transfer-codes", headers=auth(admin))
+
+    assert res.status_code == 201
+    body = res.get_json()
+    assert len(body["code"]) == 8
+    assert body["expiresAt"].endswith("+08:00")
+    claimed = _claim(client, body["code"])
+    assert claimed.status_code == 200
+    assert claimed.get_json()["guest"] == hui
+
+
+def test_admin_issued_code_is_single_use(client, join):
+    _, hui = join("小慧")
+    admin = _admin(client, join)
+    code = client.post(f"/api/guests/{hui['id']}/transfer-codes", headers=auth(admin)).get_json()
+
+    assert _claim(client, code["code"]).status_code == 200
+    assert _claim(client, code["code"]).status_code == 401
+
+
+def test_only_admin_can_issue_for_others(client, join):
+    _, hui = join("小慧")
+    kai, _ = join("阿凱")
+
+    res = client.post(f"/api/guests/{hui['id']}/transfer-codes", headers=auth(kai))
+
+    assert res.status_code == 403
+    assert res.get_json()["error"]["code"] == "not_admin"
+    assert client.post(f"/api/guests/{hui['id']}/transfer-codes").status_code == 401
+
+
+def test_issue_for_unknown_guest(client, join):
+    admin = _admin(client, join)
+
+    res = client.post("/api/guests/g_nobody/transfer-codes", headers=auth(admin))
+
+    assert res.status_code == 404
+    assert res.get_json()["error"]["code"] == "guest_not_found"

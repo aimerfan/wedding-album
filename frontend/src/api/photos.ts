@@ -11,6 +11,8 @@ export interface PhotoFilter {
   uploader?: string
   /** 只列我收藏的（「我的 → 收藏」） */
   favorited?: 'true'
+  /** 首頁的搜尋：上傳者的暱稱或「與新人的關係」含有這段文字 */
+  q?: string
 }
 
 export function fetchPhotos(filter: PhotoFilter, cursor?: string | null, limit = 30) {

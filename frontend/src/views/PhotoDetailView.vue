@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ApiError } from '@/api/client'
 import { deletePhoto, editPhoto, fetchPhoto, setFavorited, setLiked } from '@/api/photos'
@@ -109,6 +109,48 @@ const takenLabel = computed(() => {
     tagLabel(p.tag)
   )
 })
+
+// --- 手機橫放：點一下照片收起／叫出按鈕與資訊條 ---------------------------
+// 版面本身由 CSS 的 media query 切換，這裡只記「收起來了沒」。條件要跟 <style> 裡的一致
+
+const LANDSCAPE = '(orientation: landscape) and (max-height: 500px)'
+const landscapeQuery = window.matchMedia(LANDSCAPE)
+const immersive = ref(false)
+
+// 轉向時一律先顯示：直式時點過照片，轉成橫的不該一開始就什麼都看不到
+function onOrientation() {
+  immersive.value = false
+}
+onMounted(() => landscapeQuery.addEventListener('change', onOrientation))
+onBeforeUnmount(() => landscapeQuery.removeEventListener('change', onOrientation))
+
+/**
+ * 點照片：像 IG 一樣把畫面左右三等分，點左邊上一張、點右邊下一張；
+ * 點中間在橫放時收起／叫出按鈕與資訊條，直式時不做事。
+ * 點在影片上是叫出播放控制，一律不處理；影片旁邊的黑邊照樣可以點左右換張。
+ * 影片那張中間也不切換（見 <style> 的 .is-video：上方按鈕改成播放中收起）。
+ */
+function onStageClick(e: MouseEvent) {
+  if ((e.target as Element).closest('video')) return
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const x = (e.clientX - rect.left) / rect.width
+  const i = index.value
+  if (x < 1 / 3) {
+    if (i > 0) current.value = i - 1
+  } else if (x > 2 / 3) {
+    if (i < photos.value.length - 1) current.value = i + 1
+  } else if (landscapeQuery.matches && photo.value?.kind !== 'video') {
+    immersive.value = !immersive.value
+  }
+}
+
+/**
+ * 影片播放中，橫放時上方按鈕也收起來，畫面上只剩影片；暫停或播完再出現（一般影片 app 的習慣）。
+ * play／pause 事件不會冒泡，所以在 .stage 上用 capture 接。
+ * 換張時播放器整個被拿掉，不一定有 pause 事件，要自己歸零。
+ */
+const playing = ref(false)
+watch(() => props.photoId, () => (playing.value = false))
 
 function close() {
   if (window.history.state?.back) router.back()
@@ -290,7 +332,14 @@ function toggleFavorite() {
 </script>
 
 <template>
-  <main v-if="photo" class="detail">
+  <main
+    v-if="photo"
+    class="detail"
+    :class="{
+      immersive: (immersive || playing) && !moreOpen,
+      'is-video': photo.kind === 'video',
+    }"
+  >
     <header class="bar">
       <button class="round" type="button" aria-label="關閉" @click="close">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
@@ -320,9 +369,13 @@ function toggleFavorite() {
           </svg>
         </button>
         <div v-if="moreOpen" class="more-pop" role="menu">
-          <button type="button" role="menuitem" @click="startEdit">{{ editLabel }}</button>
+          <!-- 編輯說明與分類只在直式做：橫放時面板只剩資訊條，放不下編輯表單（見 <style>） -->
+          <button class="portrait-only" type="button" role="menuitem" @click="startEdit">
+            {{ editLabel }}
+          </button>
           <button
             v-if="!isMine && photo.caption"
+            class="portrait-only"
             type="button"
             role="menuitem"
             :disabled="saving"
@@ -338,7 +391,13 @@ function toggleFavorite() {
       <span v-else class="round-spacer" />
     </header>
 
-    <div class="stage">
+    <div
+      class="stage"
+      @click="onStageClick"
+      @play.capture="playing = true"
+      @pause.capture="playing = false"
+      @ended.capture="playing = false"
+    >
       <PhotoSwiper v-model="current" :slides="slides" />
     </div>
 
@@ -864,5 +923,115 @@ function toggleFavorite() {
 
 .editor-actions button:disabled {
   opacity: 0.5;
+}
+
+/*
+ * 手機橫放：照片（影片）佔滿整個螢幕，上方按鈕與下方面板都浮在照片上，
+ * 面板變成半透明的資訊條。點一下照片兩者一起收起來（.immersive），再點一下叫回來。
+ * 限定高度 500px 以下，只有橫拿的手機會套用，平板橫放照舊；條件要跟 <script> 裡的 LANDSCAPE 一致。
+ * 轉回直式就回到原本的版面，停在同一張（PhotoSwiper 會自己重新對齊）。
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  .detail {
+    background: var(--c-dark-stage);
+  }
+
+  /* 瀏海在左右兩側，按鈕要避開 */
+  .bar {
+    top: calc(var(--safe-top) + 12px);
+    left: calc(var(--safe-left) + 16px);
+    right: calc(var(--safe-right) + 16px);
+  }
+
+  .stage {
+    padding: 0;
+  }
+
+  .bar,
+  .panel {
+    transition: opacity 0.2s;
+  }
+
+  .immersive .bar,
+  .immersive .panel {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    max-height: none;
+    overflow: visible;
+    border-radius: 0;
+    background: var(--c-dark-scrim);
+    color: var(--c-dark-ink);
+    padding: 10px calc(var(--safe-right) + 20px) calc(var(--safe-bottom) + 10px)
+      calc(var(--safe-left) + 20px);
+  }
+
+  /*
+   * 影片點一下是叫出播放控制，不切換；資訊條會蓋住控制列，所以不顯示。
+   * 上方按鈕改成播放中收起（.immersive 由 playing 帶出來），暫停就回來
+   */
+  .is-video .panel {
+    display: none;
+  }
+
+  /*
+   * 資訊條只留上傳者那一列和說明兩行。留言、編輯表單、「為這張說點什麼」都要轉回直式才看得到：
+   * 浮在照片上的資訊條放不下，也避免橫放時鍵盤把整個畫面蓋掉。
+   * .comments 是 PhotoComments 的根元素，scoped 樣式管得到子元件的根
+   */
+  .grip,
+  .comments,
+  .editor,
+  .caption-add,
+  .caption-edited,
+  .portrait-only {
+    display: none;
+  }
+
+  .uploader {
+    margin-bottom: 0;
+  }
+
+  .avatar {
+    background: var(--c-dark-line);
+  }
+
+  .meta,
+  .chevron {
+    color: var(--c-dark-ink-mute);
+  }
+
+  .action,
+  .bookmark {
+    color: var(--c-dark-ink);
+  }
+
+  .action-error {
+    margin: 6px 0 0;
+  }
+
+  /* 說明只留兩行，完整的要轉回直式看 */
+  .caption {
+    margin-top: 6px;
+    padding: 0;
+    background: transparent;
+  }
+
+  .caption-text {
+    font-size: 13px;
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
 }
 </style>

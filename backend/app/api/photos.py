@@ -27,6 +27,9 @@ from app.models import (
 )
 from app.pagination import paginate
 
+# 搜尋字串最多看幾個字：比暱稱、關係的上限長也沒有意義，順便擋掉超長的參數
+SEARCH_MAX = 30
+
 
 def _today_range_utc() -> tuple[datetime, datetime]:
     """台灣時間「今天」的起訖，換成資料庫裡存的 UTC（不帶時區）。"""
@@ -63,6 +66,14 @@ def list_photos():
 
     if uploader := args.get("uploader"):
         query = query.where(Photo.uploader_id == (g.guest.id if uploader == "me" else uploader))
+
+    # 相簿頁的搜尋：上傳者的暱稱或「與新人的關係」含有這段文字（英文不分大小寫）。
+    # autoescape：使用者打的 % 和 _ 照字面比對，不當萬用字元
+    if q := args.get("q", "").strip()[:SEARCH_MAX]:
+        query = query.join(Guest, Guest.id == Photo.uploader_id).where(
+            Guest.nickname.contains(q, autoescape=True)
+            | Guest.relation.contains(q, autoescape=True)
+        )
 
     if args.get("favorited") == "true":
         # 收藏是私人的，只能看自己的

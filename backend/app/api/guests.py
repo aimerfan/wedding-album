@@ -1,4 +1,4 @@
-"""身分相關：加入相簿、目前這位賓客的資料、換裝置的接續碼。"""
+"""身分相關：加入相簿、目前這位賓客的資料、換裝置的接續碼（含管理員替別人產生）。"""
 
 import hmac
 import secrets
@@ -132,19 +132,37 @@ def _new_code() -> str:
     return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_LENGTH))
 
 
-@bp.post("/me/transfer-codes")
-@require_guest
-def create_transfer_code():
-    """產生接續碼。完整連結由前端組（前端才知道自己的網址）。"""
+def _issue_transfer_code(guest_id: str):
+    """產生一組接續碼並回傳 201。完整連結由前端組（前端才知道自己的網址）。"""
     minutes = current_app.config["TRANSFER_CODE_MINUTES"]
     transfer = TransferCode(
         code=_new_code(),
-        guest_id=g.guest.id,
+        guest_id=guest_id,
         expires_at=now() + timedelta(minutes=minutes),
     )
     db.session.add(transfer)
     db.session.commit()
     return jsonify({"code": transfer.code, "expiresAt": iso(transfer.expires_at)}), 201
+
+
+@bp.post("/me/transfer-codes")
+@require_guest
+def create_transfer_code():
+    return _issue_transfer_code(g.guest.id)
+
+
+@bp.post("/guests/<guest_id>/transfer-codes")
+@require_guest
+def create_transfer_code_for_guest(guest_id: str):
+    """管理員替別人產生接續碼：原本的裝置不見了（換手機、清掉瀏覽器資料）時，靠管理員找回身分。
+
+    跟本人產生的接續碼完全一樣（一次性、限時），對方在歡迎頁「輸入接續碼」就能接回。
+    """
+    if not g.guest.is_admin:
+        raise ApiError(403, "not_admin", "只有管理員可以替別人產生接續碼")
+    if db.session.get(Guest, guest_id) is None:
+        raise ApiError(404, "guest_not_found", "找不到這位賓客")
+    return _issue_transfer_code(guest_id)
 
 
 @bp.post("/guests/claim")
